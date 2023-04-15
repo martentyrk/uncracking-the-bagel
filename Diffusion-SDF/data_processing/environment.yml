@@ -1,0 +1,10 @@
+name: diffusionsdf-data_processing
+channels:
+  - defaults
+dependencies:
+  - pip:
+    - scikit-image==0.19.2
+    - scikit-learn==1.2.1
+    - jupyter==1.0.0
+    - pandas==2.0.0
+    - matplotlib==3.7.1
