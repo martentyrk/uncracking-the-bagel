@@ -131,3 +131,6 @@ dmypy.json
 
 # pycharm IDE
 .idea/
+
+Diffusion-SDF/data
+Diffusion-SDF/data_processing/acronym/
