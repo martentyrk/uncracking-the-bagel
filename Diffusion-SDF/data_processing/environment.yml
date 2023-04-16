@@ -8,3 +8,4 @@ dependencies:
     - jupyter==1.0.0
     - pandas==2.0.0
     - matplotlib==3.7.1
+    - h5py==3.8.0
