@@ -6,7 +6,7 @@ __pycache__/
 datasets
 # C extensions
 *.so
-
+DeepSDF/deep_sdf/__pycache__/
 # Distribution / packaging
 .Python
 build/
