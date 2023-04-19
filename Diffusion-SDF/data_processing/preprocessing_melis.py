@@ -8,6 +8,12 @@ import pandas as pd
 import trimesh
 from tqdm import tqdm
 
+'''@melis'''
+import mesh_to_sdf
+import open3d as o3d
+
+''' @melis: Required for running mesh_to_sdf without the display'''
+os.environ['PYOPENGL_PLATFORM'] = 'egl'
 
 def load_mesh(filename, mesh_root_dir, scale=None):
     """Load a mesh from a JSON or HDF5 file from the grasp dataset. The mesh will be scaled accordingly.
@@ -51,16 +57,19 @@ def resize_to_nocs(obj_mesh):
     t = - c
 
     # scaling
-    s = np.min(2 / np.abs(p2 - p1))
-    S = s * np.eye(3)
+    ''' @melis: The diagonal of the object bounding box should be 1. 
+    You're fitting the object tightly to a cube with coordinates ranging from (-1,-1,-1) to (1, 1, 1) which is wrong.
+    Your object should be at the center of this cube but the diagonal of its own tight box should be 1.
+    '''
+    diagonal_len = np.linalg.norm(p2 - p1)
 
     # homogeneous transformation matrix
     transform = np.eye(4, dtype=float)
-    transform[:3, :3] = S
-    transform[:3, 3] = s * t
+    transform[:3, 3] = 1 * t
 
     obj_mesh_nocs = copy(obj_mesh)
     obj_mesh_nocs.apply_transform(transform)
+    obj_mesh_nocs.apply_scale(1.0 / diagonal_len)
 
     return obj_mesh_nocs
 
@@ -73,9 +82,11 @@ def sample_surface(mesh, n):
 def sample_near(points):
     sampled_points = []
     for p in tqdm(points, desc='sample near surface'):
-        p1 = np.random.multivariate_normal(p, 0.005 * np.eye(3), 1)[0]
-        p2 = np.random.multivariate_normal(p, 0.0005 * np.eye(3), 1)[0]
+        ''' @melis: Please check the documentation of this - not sure if it should be squared or not.'''
+        p1 = np.random.multivariate_normal(p, (0.005) * np.eye(3), 1)[0]
+        p2 = np.random.multivariate_normal(p, (0.0005)  * np.eye(3), 1)[0]
         sampled_points.extend([p1, p2])
+
     return np.array(sampled_points)
 
 
@@ -88,7 +99,7 @@ def sample_grid(res=128):
 
 
 def signed_distance(mesh, query_points):
-    chunks = np.array_split(query_points, len(query_points)//1000)  # lighter chunks
+    chunks = np.array_split(query_points, len(query_points) // 1000)  # lighter chunks
     sds = []
     for chunk in tqdm(chunks, desc='signed distances'):
         chunk_sds = trimesh.proximity.signed_distance(mesh, chunk)
@@ -119,13 +130,27 @@ def preprocess(mesh, save_dir='.', n=235000):
     """
     p_surf = sample_surface(mesh, n)
     p_near = sample_near(p_surf)
-    psd_surf = np.hstack([p_surf, signed_distance(mesh, p_surf)])
-    psd_near = np.hstack([p_near, signed_distance(mesh, p_near)])
+
+    ''' @melis: Sanity check visualization'''
+    pcd1 = o3d.geometry.PointCloud()
+    pcd1.points = o3d.utility.Vector3dVector(p_surf)
+    o3d.io.write_point_cloud("test-surf.ply", pcd1)
+    pcd2 = o3d.geometry.PointCloud()
+    pcd2.points = o3d.utility.Vector3dVector(p_near)
+    o3d.io.write_point_cloud("test-near.ply", pcd2)
+
+    ''' @melis: SDF is always 0 at the zero-crossings (boundaries of the mesh). So no need to compute SDF on the surface, accept as 0 directly.'''
+    psd_surf = np.hstack([p_surf, np.zeros((p_surf.shape[0],1))])
+
+    ''' @melis: You don't need to use sample_sdf_near_surface. mesh_to_sdf method actually computes SDF values for query coordinates (p_near). 
+    Please check the documentation: https://pypi.org/project/mesh-to-sdf/
+    You should be also using this method for obtaining the SDF value for grid coordinates.'''
+    sdf_near = mesh_to_sdf.mesh_to_sdf(mesh, p_near, surface_point_method='scan', sign_method='normal', bounding_radius=None,
+                            scan_count=100, scan_resolution=400, sample_point_count=10000000, normal_sample_count=11)
+    sdf_near = sdf_near.reshape((sdf_near.shape[0],1))
+    psd_near = np.hstack([p_near, sdf_near])
     surf = np.vstack([psd_surf, psd_near])
-    
-    #Should we replace all the previous 5 lines with :
-    #sdf, _ = sample_sdf_near_surface(mesh, number_of_points=n)
-    
+
     save_to_csv(surf, path=f'{save_dir}/surf.csv')
 
 
@@ -141,7 +166,18 @@ def preprocess_grid(mesh, save_dir='.', res=128):
     :return:
     """
     p_grid = sample_grid(res)
-    grid = np.hstack([p_grid, signed_distance(mesh, p_grid)])
+
+    ''' @melis: Sanity check visualization'''
+    pcd3 = o3d.geometry.PointCloud()
+    pcd3.points = o3d.utility.Vector3dVector(p_grid)
+    o3d.io.write_point_cloud("test-grid.ply", pcd3)
+
+    ''' @melis: Similar to before.. '''
+    sdf_grid = mesh_to_sdf.mesh_to_sdf(mesh, p_grid, surface_point_method='scan', sign_method='normal', bounding_radius=None,
+                            scan_count=100, scan_resolution=400, sample_point_count=10000000, normal_sample_count=11)
+    sdf_near = sdf_grid.reshape((sdf_grid.shape[0], 1))
+    grid = np.hstack([p_grid, sdf_near])
+
     save_to_csv(grid, path=f'{save_dir}/grid.csv')
 
 
@@ -162,17 +198,20 @@ def preprocess_all(grasps_dir, meshes_root_dir):
 
 
 if __name__ == '__main__':
-    grasp_path = "../data/NVlabs acronym main data-examples/grasps/Mug_10f6e09036350e92b3f21f1137c3c347_0.0002682457830986903.h5"
-    mesh_root_dir = "../data/NVlabs acronym main data-examples/"
+    grasp_path = "./data/examples/grasps/Mug_10f6e09036350e92b3f21f1137c3c347_0.0002682457830986903.h5"
+    mesh_root_dir = "./data/examples/"
 
     mesh = load_mesh(grasp_path, mesh_root_dir)
+    mesh.export("test1.obj")
     mesh = resize_to_nocs(mesh)
+    mesh.export("test2.obj")
     # show_mesh(mesh)
 
-    preprocess_all("../data/NVlabs acronym main data-examples/grasps",
-                   "../data/NVlabs acronym main data-examples/")
+    preprocess_all("./data/examples/grasps",
+                   "./data/examples/")
 
     print('surface')
     preprocess(mesh)
     print('grid')
     preprocess_grid(mesh)
+    print("Done!")
