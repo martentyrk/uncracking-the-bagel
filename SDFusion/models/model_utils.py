@@ -16,7 +16,7 @@ def load_vqvae(vq_conf, vq_ckpt, opt=None):
     n_down = len(ddconfig.ch_mult) - 1
 
     vqvae = VQVAE(ddconfig, n_embed, embed_dim)
-    
+
     map_fn = lambda storage, loc: storage
     state_dict = torch.load(vq_ckpt, map_location=map_fn)
     if 'vqvae' in state_dict:

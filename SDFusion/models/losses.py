@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class VQLoss(nn.Module):
     def __init__(self, codebook_weight=1.0):
         super().__init__()
@@ -24,4 +25,3 @@ class VQLoss(nn.Module):
         }
 
         return loss, log
-    

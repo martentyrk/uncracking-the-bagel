@@ -1,4 +1,3 @@
-
 import numpy as np
 from einops import rearrange
 from omegaconf import OmegaConf
@@ -13,6 +12,7 @@ from datasets.dataloader import CreateDataLoader, get_data_generator
 from models.base_model import create_model
 
 from utils.util import seed_everything
+
 
 ############ START: all Opt classes ############
 
@@ -39,12 +39,12 @@ class BaseOpt(object):
 
         if seed is not None:
             seed_everything(seed)
-            
+
         self.phase = 'test'
 
     def name(self):
-
         return 'BaseOpt'
+
 
 class VQVAEOpt(BaseOpt):
     def __init__(self, gpu_ids=0, seed=None):
@@ -57,18 +57,19 @@ class VQVAEOpt(BaseOpt):
     def name(self):
         return 'VQVAETestOpt'
 
+
 class SDFusionOpt(BaseOpt):
     def __init__(self, gpu_ids=0, seed=None):
         super().__init__(gpu_ids, seed=seed)
 
         # some other custom args here
-        
+
         ## building net
-        # opt.res = 128
-        # opt.dataset_mode = 'buildingnet'
-        # opt.cat = 'all'
+        #         opt.res = 128
+        #         opt.dataset_mode = 'buildingnet'
+        #         opt.cat = 'all'
         print(f'[*] {self.name()} initialized.')
-        
+
     def init_dset_args(self, dataset_mode='snet', cat='all', res=64):
         # dataset - snet
         self.dataroot = None
@@ -76,17 +77,24 @@ class SDFusionOpt(BaseOpt):
         self.ratio = 1.0
         self.res = res
         self.dataset_mode = dataset_mode
+        self.model = 'sdfusion'
+        self.df_cfg = 'configs/sdfusion_snet.yaml'
+        self.vq_cfg = 'configs/vqvae_snet.yaml'
+        vq_ckpt_path = 'saved_ckpt/vqvae-snet-all.pth'
+        self.vq_ckpt = vq_ckpt_path
+        ckpt_path = 'saved_ckpt/sdfusion-snet-all.pth'
+        self.ckpt = ckpt_path
         self.cat = cat
 
     def init_model_args(
             self,
             ckpt_path='saved_ckpt/sdfusion-snet-all.pth',
             vq_ckpt_path='saved_ckpt/vqvae-snet-all.pth',
-        ):
+    ):
         self.model = 'sdfusion'
         self.df_cfg = 'configs/sdfusion_snet.yaml'
         self.ckpt = ckpt_path
-        
+
         self.vq_model = 'vqvae'
         self.vq_cfg = 'configs/vqvae_snet.yaml'
         self.vq_ckpt = vq_ckpt_path
@@ -103,7 +111,7 @@ class SDFusionText2ShapeOpt(BaseOpt):
 
         # some other custom args here
         print(f'[*] {self.name()} initialized.')
-        
+
     def init_dset_args(self, dataset_mode='text2shape', cat='all', res=64):
         # dataset - snet
         self.dataroot = None
@@ -112,16 +120,16 @@ class SDFusionText2ShapeOpt(BaseOpt):
         self.res = res
         self.dataset_mode = dataset_mode
         self.cat = cat
-        
+
     def init_model_args(
             self,
             ckpt_path='saved_ckpt/sdfusion-txt2shape.pth',
             vq_ckpt_path='saved_ckpt/vqvae-snet-all.pth',
-        ):
+    ):
         self.model = 'sdfusion-txt2shape'
         self.df_cfg = 'configs/sdfusion-txt2shape.yaml'
         self.ckpt = ckpt_path
-        
+
         self.vq_model = 'vqvae'
         self.vq_cfg = 'configs/vqvae_snet.yaml'
         self.vq_ckpt = vq_ckpt_path
@@ -131,13 +139,14 @@ class SDFusionText2ShapeOpt(BaseOpt):
     def name(self):
         return 'SDFusionText2ShapeOption'
 
+
 class SDFusionImage2ShapeOpt(BaseOpt):
     def __init__(self, gpu_ids=0, seed=None):
         super().__init__(gpu_ids, seed=seed)
 
         # some other custom args here
         print(f'[*] {self.name()} initialized.')
-        
+
     def init_dset_args(self, dataset_mode='pix3d_img2shape', cat='all', res=64):
         # dataset - snet
         self.dataroot = None
@@ -146,16 +155,16 @@ class SDFusionImage2ShapeOpt(BaseOpt):
         self.res = res
         self.dataset_mode = dataset_mode
         self.cat = cat
-        
+
     def init_model_args(
             self,
             ckpt_path='saved_ckpt/sdfusion-img2shape.pth',
             vq_ckpt_path='saved_ckpt/vqvae-snet-all.pth',
-        ):
+    ):
         self.model = 'sdfusion-img2shape'
         self.df_cfg = 'configs/sdfusion-img2shape.yaml'
         self.ckpt = ckpt_path
-        
+
         self.vq_model = 'vqvae'
         self.vq_cfg = 'configs/vqvae_snet.yaml'
         self.vq_ckpt = vq_ckpt_path
@@ -171,7 +180,7 @@ class SDFusionImage2ShapeOpt(BaseOpt):
 # get partial shape from range
 def get_partial_shape(shape, xyz_dict, z=None):
     """
-        args:  
+        args:
             shape: input sdf. (B, 1, H, W, D)
             xyz_dict: user-specified range.
                 x: left to right
@@ -183,75 +192,76 @@ def get_partial_shape(shape, xyz_dict, z=None):
     (x_min, x_max) = xyz_dict['x']
     (y_min, y_max) = xyz_dict['y']
     (z_min, z_max) = xyz_dict['z']
-    
+
     # clamp to [-1, 1]
     x_min, x_max = max(-1, x_min), min(1, x_max)
     y_min, y_max = max(-1, y_min), min(1, y_max)
     z_min, z_max = max(-1, z_min), min(1, z_max)
 
-    B, _, H, W, D = x.shape # assume D = H = W
+    B, _, H, W, D = x.shape  # assume D = H = W
 
-    x_st = int( (x_min - (-1))/2 * H )
-    x_ed = int( (x_max - (-1))/2 * H )
-    
-    y_st = int( (y_min - (-1))/2 * W )
-    y_ed = int( (y_max - (-1))/2 * W )
-    
-    z_st = int( (z_min - (-1))/2 * D )
-    z_ed = int( (z_max - (-1))/2 * D )
-    
+    x_st = int((x_min - (-1)) / 2 * H)
+    x_ed = int((x_max - (-1)) / 2 * H)
+
+    y_st = int((y_min - (-1)) / 2 * W)
+    y_ed = int((y_max - (-1)) / 2 * W)
+
+    z_st = int((z_min - (-1)) / 2 * D)
+    z_ed = int((z_max - (-1)) / 2 * D)
+
     # print('x: ', xyz_dict['x'], x_st, x_ed)
     # print('y: ', xyz_dict['y'], y_st, y_ed)
     # print('z: ', xyz_dict['z'], z_st, z_ed)
 
-    # where to keep    
+    # where to keep
     x_mask = torch.ones(B, 1, H, W, D).bool().to(device)
     x_mask[:, :, :x_st, :, :] = False
     x_mask[:, :, x_ed:, :, :] = False
-    
+
     x_mask[:, :, :, :y_st, :] = False
     x_mask[:, :, :, y_ed:, :] = False
-    
+
     x_mask[:, :, :, :, :z_st] = False
     x_mask[:, :, :, :, z_ed:] = False
-        
+
     shape_part = x.clone()
     shape_missing = x.clone()
-    shape_part[~x_mask] = 0.2 # T-SDF
+    shape_part[~x_mask] = 0.2  # T-SDF
     shape_missing[x_mask] = 0.2
-    
+
     ret = {
         'shape_part': shape_part,
         'shape_missing': shape_missing,
         'shape_mask': x_mask,
     }
-    
-    if z is not None:
-        B, _, zH, zW, zD = z.shape # assume D = H = W
 
-        x_st = int( (x_min - (-1))/2 * zH )
-        x_ed = int( (x_max - (-1))/2 * zH )
-        
-        y_st = int( (y_min - (-1))/2 * zW )
-        y_ed = int( (y_max - (-1))/2 * zW )
-        
-        z_st = int( (z_min - (-1))/2 * zD )
-        z_ed = int( (z_max - (-1))/2 * zD )
-        
-        # where to keep    
+    if z is not None:
+        B, _, zH, zW, zD = z.shape  # assume D = H = W
+
+        x_st = int((x_min - (-1)) / 2 * zH)
+        x_ed = int((x_max - (-1)) / 2 * zH)
+
+        y_st = int((y_min - (-1)) / 2 * zW)
+        y_ed = int((y_max - (-1)) / 2 * zW)
+
+        z_st = int((z_min - (-1)) / 2 * zD)
+        z_ed = int((z_max - (-1)) / 2 * zD)
+
+        # where to keep
         z_mask = torch.ones(B, 1, zH, zW, zD).to(device)
         z_mask[:, :, :x_st, :, :] = 0.
         z_mask[:, :, x_ed:, :, :] = 0.
-        
+
         z_mask[:, :, :, :y_st, :] = 0.
         z_mask[:, :, :, y_ed:, :] = 0.
-    
+
         z_mask[:, :, :, :, :z_st] = 0.
         z_mask[:, :, :, :, z_ed:] = 0.
-        
+
         ret['z_mask'] = z_mask
 
     return ret
+
 
 # for img2shape
 # https://stackoverflow.com/questions/31400769/bounding-box-of-numpy-array
@@ -263,6 +273,7 @@ def mask2bbox(mask):
     cmin, cmax = np.where(cols)[0][[0, -1]]
     # return rmin, rmax, cmin, cmax
     return cmin, rmin, cmax, rmax
+
 
 # ref: pix2vox: https://github.com/hzxie/Pix2Vox/blob/f1b82823e79d4afeedddfadb3da0940bcf1c536d/utils/data_transforms.py
 def crop_square(img, bbox, img_size_h=256, img_size_w=256):
@@ -304,9 +315,9 @@ def crop_square(img, bbox, img_size_h=256, img_size_w=256):
 
     # Padding the image and resize the image
     processed_image = np.pad(img[y_top:y_bottom + 1, x_left:x_right + 1],
-                                ((pad_y_top, pad_y_bottom), (pad_x_left, pad_x_right), (0, 0)),
-                                mode='edge')
-    
+                             ((pad_y_top, pad_y_bottom), (pad_x_left, pad_x_right), (0, 0)),
+                             mode='edge')
+
     pil_img = Image.fromarray(processed_image)
     pil_img = pil_img.resize((img_size_w, img_size_h))
     # processed_image = cv2.resize(processed_image, (img_size_w, img_size_h))
@@ -323,17 +334,17 @@ def preprocess_image(image, mask):
         mask_np = np.array(Image.open(mask).convert('1'))
     else:
         mask_np = mask
-        
+
     # get bbox from mask
     x0, y0, x1, y1 = mask2bbox(mask_np)
     bbox = [x0, y0, x1, y1]
-        
+
     r = 0.7
-    img_comp = img_np * mask_np[:, :, None] + (1 - mask_np[:, :, None]) * (r*255 + (1 - r) * img_np)
+    img_comp = img_np * mask_np[:, :, None] + (1 - mask_np[:, :, None]) * (r * 255 + (1 - r) * img_np)
     img_comp = crop_square(img_comp.astype(np.uint8), bbox)
-    
+
     img_clean = img_np * mask_np[:, :, None]
     img_clean = crop_square(img_clean.astype(np.uint8), bbox)
-    
+
     return img_comp, img_clean
 

@@ -32,13 +32,14 @@ def tensor2im(image_tensor, imtype=np.uint8):
         image_tensor = image_tensor.repeat(1, 3, 1, 1)
 
     # if image_tensor.shape[1] == 4:
-        # import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
 
-    image_tensor = vutils.make_grid( image_tensor, nrow=4 )
+    image_tensor = vutils.make_grid(image_tensor, nrow=4)
 
     image_numpy = image_tensor.cpu().float().numpy()
-    image_numpy = ( np.transpose( image_numpy, (1, 2, 0) ) + 1) / 2.0 * 255.
+    image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.
     return image_numpy.astype(imtype)
+
 
 def tensor_to_pil(tensor):
     # """ assume shape: c h w """
@@ -46,7 +47,8 @@ def tensor_to_pil(tensor):
         tensor = vutils.make_grid(tensor)
 
     # assert tensor.dim() == 3
-    return Image.fromarray( (rearrange(tensor, 'c h w -> h w c').cpu().numpy() * 255.).astype(np.uint8) )
+    return Image.fromarray((rearrange(tensor, 'c h w -> h w c').cpu().numpy() * 255.).astype(np.uint8))
+
 
 ################# END: PyTorch Tensor functions #################
 
@@ -56,6 +58,7 @@ def to_variable(numpy_data, volatile=False):
     torch_data = torch.from_numpy(numpy_data).float()
     variable = Variable(torch_data, volatile=volatile)
     return variable
+
 
 def diagnose_network(net, name='network'):
     mean = 0.0
@@ -97,8 +100,8 @@ def mkdir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+
 def seed_everything(seed):
-    
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
@@ -106,7 +109,7 @@ def seed_everything(seed):
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
-    
+
 
 def iou(x_gt, x, thres):
     thres_gt = 0.0
@@ -129,6 +132,7 @@ def iou(x_gt, x, thres):
     iou = inter.sum(1) / (union.sum(1) + 1e-12)
     return iou
 
+
 #################### START: MISCELLANEOUS ####################
 def count_params(model, verbose=False):
     total_params = sum(p.numel() for p in model.parameters())
@@ -136,19 +140,19 @@ def count_params(model, verbose=False):
         print(f"{model.__class__.__name__} has {total_params * 1.e-6:.2f} M params.")
     return total_params
 
-#################### END: MISCELLANEOUS ####################
 
+#################### END: MISCELLANEOUS ####################
 
 
 # Noam Learning rate schedule.
 # From https://github.com/tugstugi/pytorch-saltnet/blob/master/utils/lr_scheduler.py
 class NoamLR(_LRScheduler):
-	
-	def __init__(self, optimizer, warmup_steps):
-		self.warmup_steps = warmup_steps
-		super().__init__(optimizer)
 
-	def get_lr(self):
-		last_epoch = max(1, self.last_epoch)
-		scale = self.warmup_steps ** 0.5 * min(last_epoch ** (-0.5), last_epoch * self.warmup_steps ** (-1.5))
-		return [base_lr * scale for base_lr in self.base_lrs]
+    def __init__(self, optimizer, warmup_steps):
+        self.warmup_steps = warmup_steps
+        super().__init__(optimizer)
+
+    def get_lr(self):
+        last_epoch = max(1, self.last_epoch)
+        scale = self.warmup_steps ** 0.5 * min(last_epoch ** (-0.5), last_epoch * self.warmup_steps ** (-1.5))
+        return [base_lr * scale for base_lr in self.base_lrs]

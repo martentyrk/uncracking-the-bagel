@@ -1,4 +1,3 @@
-
 import pickle
 from collections import OrderedDict
 import os
@@ -14,6 +13,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
+
 def parse_line(line):
     info_d = {}
 
@@ -26,10 +26,9 @@ def parse_line(line):
 
     info_d = {}
     for s in l1:
-        
+
         k, v = s.split(': ')
-        
-        
+
         if k in ['epoch', 'iters']:
             info_d[k] = int(v)
         else:
@@ -37,9 +36,9 @@ def parse_line(line):
 
     l2_keys = l2[0::2]
     l2_vals = l2[1::2]
-    
+
     for k, v in zip(l2_keys, l2_vals):
-        k = k.replace(':','')
+        k = k.replace(':', '')
         info_d[k] = float(v)
 
     return info_d
@@ -62,8 +61,8 @@ class Visualizer():
         self.opt = opt
 
     def setup_io(self):
-        
-        print('[*] create image directory:\n%s...' % os.path.abspath(self.img_dir) )
+
+        print('[*] create image directory:\n%s...' % os.path.abspath(self.img_dir))
         util.mkdirs([self.img_dir])
         # self.log_name = os.path.join(opt.checkpoints_dir, opt.name, 'loss_log.txt')
 
@@ -127,7 +126,8 @@ class Visualizer():
 
             if label not in labels_while_list:
                 # writer.add_image('vis/%d-%s' % (ix+1, label), image_numpy, global_step=cur_step, dataformats='HWC')
-                writer.add_image('%s/%d-%s' % (phase, ix+1, label), image_numpy, global_step=cur_step, dataformats='HWC')
+                writer.add_image('%s/%d-%s' % (phase, ix + 1, label), image_numpy, global_step=cur_step,
+                                 dataformats='HWC')
             else:
                 pass
                 # log the unwanted image just in case

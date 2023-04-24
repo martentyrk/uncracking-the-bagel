@@ -3,17 +3,18 @@ from termcolor import colored, cprint
 import torch
 import utils.util as util
 
+
 def create_model(opt):
     model = None
 
     if opt.model == 'vqvae':
         from models.vqvae_model import VQVAEModel
         model = VQVAEModel()
-    
+
     elif opt.model == 'sdfusion':
         from models.sdfusion_model import SDFusionModel
         model = SDFusionModel()
-        
+
     elif opt.model == 'sdfusion-txt2shape':
         from models.sdfusion_txt2shape_model import SDFusionText2ShapeModel
         model = SDFusionText2ShapeModel()
@@ -25,7 +26,7 @@ def create_model(opt):
     elif opt.model == 'sdfusion-mm':
         from models.sdfusion_mm_model import SDFusionMultiModal2ShapeModel
         model = SDFusionMultiModal2ShapeModel()
-        
+
     else:
         raise ValueError("Model [%s] not recognized." % opt.model)
 
@@ -123,7 +124,6 @@ class BaseModel():
                 var = getattr(self, name)
                 # setattr(self, name, var.cuda(self.gpu_ids[0], non_blocking=True))
                 setattr(self, name, var.cuda(self.opt.device, non_blocking=True))
-
 
     def tnsrs2ims(self, tensor_names):
         ims = []
