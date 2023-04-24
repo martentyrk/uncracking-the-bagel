@@ -72,7 +72,7 @@ class SDFusionOpt(BaseOpt):
 
     def init_dset_args(self, dataset_mode='snet', cat='all', res=64):
         # dataset - snet
-        self.dataroot = None
+        self.dataroot = 'data'
         self.cached_dir = None
         self.ratio = 1.0
         self.res = res
@@ -114,7 +114,7 @@ class SDFusionText2ShapeOpt(BaseOpt):
 
     def init_dset_args(self, dataset_mode='text2shape', cat='all', res=64):
         # dataset - snet
-        self.dataroot = None
+        self.dataroot = 'data'
         self.cached_dir = None
         self.ratio = 1.0
         self.res = res
@@ -149,7 +149,7 @@ class SDFusionImage2ShapeOpt(BaseOpt):
 
     def init_dset_args(self, dataset_mode='pix3d_img2shape', cat='all', res=64):
         # dataset - snet
-        self.dataroot = None
+        self.dataroot = 'data'
         self.cached_dir = None
         self.ratio = 1.0
         self.res = res
