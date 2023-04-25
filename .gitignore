@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+.vscode
 datasets
 # C extensions
 *.so
@@ -132,5 +132,4 @@ dmypy.json
 # pycharm IDE
 .idea/
 
-Diffusion-SDF/data
 Diffusion-SDF/data_processing/acronym/
