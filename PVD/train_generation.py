@@ -11,6 +11,7 @@ from utils.visualize import *
 from model.pvcnn_generation import PVCNN2Base
 import torch.distributed as dist
 from datasets.shapenet_data_pc import ShapeNet15kPointClouds
+from datasets.mvtec3d import MVTec3DTrain, MVTec3DTest
 
 '''
 some utils
@@ -488,6 +489,11 @@ def get_betas(schedule_type, b_start, b_end, time_num):
 
 
 def get_dataset(dataroot, npoints,category):
+    if category == 'bagel':
+        tr_dataset = MVTec3DTrain(dataroot, 'bagel', 224)
+        te_dataset = MVTec3DTest(dataroot, 'bagel', 224)
+        return tr_dataset, te_dataset
+
     tr_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
         categories=[category], split='train',
         tr_sample_size=npoints,
