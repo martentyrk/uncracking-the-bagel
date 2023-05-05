@@ -35,7 +35,7 @@ class MVTec3D(Dataset):
         self.size = img_size
         self.img_path = os.path.join(datasets_path, self.cls, split)
         self.rgb_transform = transforms.Compose(
-            [transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC),
+            [transforms.Resize((224, 224), interpolation=Image.BICUBIC),
              transforms.ToTensor(),
              transforms.Normalize(mean=self.IMAGENET_MEAN, std=self.IMAGENET_STD)])
 
@@ -77,7 +77,7 @@ class MVTec3DTest(MVTec3D):
     def __init__(self, datasets_path, class_name, img_size):
         super().__init__(split="test", datasets_path=datasets_path, class_name=class_name, img_size=img_size)
         self.gt_transform = transforms.Compose([
-            transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.NEAREST),
+            transforms.Resize((224, 224), interpolation=Image.NEAREST),
             transforms.ToTensor()])
         self.img_paths, self.gt_paths, self.labels = self.load_dataset()  # self.labels => good : 0, anomaly : 1
 
