@@ -490,8 +490,8 @@ def get_betas(schedule_type, b_start, b_end, time_num):
 
 def get_dataset(dataroot, npoints,category):
     if category == 'bagel':
-        tr_dataset = MVTec3DTrain(dataroot, 'bagel', 224)
-        te_dataset = MVTec3DTest(dataroot, 'bagel', 224)
+        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints)
+        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints)
         return tr_dataset, te_dataset
 
     tr_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
@@ -600,7 +600,7 @@ def train(gpu, opt, output_dir, noises_init):
     elif opt.distribution_type == 'single':
         def _transform_(m):
             return nn.parallel.DataParallel(m)
-        
+
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.device(device)
         model.multi_gpu_wrapper(_transform_)
@@ -638,8 +638,6 @@ def train(gpu, opt, output_dir, noises_init):
         if opt.distribution_type == 'multi':
             train_sampler.set_epoch(epoch)
 
-        lr_scheduler.step(epoch)
-
         for i, data in enumerate(dataloader):
             x = data['train_points'].transpose(1,2)
             noises_batch = noises_init[data['idx']].transpose(1,2)
@@ -673,9 +671,13 @@ def train(gpu, opt, output_dir, noises_init):
                              .format(
                         epoch, opt.niter, i, len(dataloader),loss.item(),
                     netpNorm, netgradNorm,
-                        ))            
-            
-        if (epoch + 1) % opt.diagIter == 0 and should_diag:            
+                        ))
+
+            lr_scheduler.step()
+
+
+        if (epoch + 1) % opt.diagIter == 0 and should_diag:
+
             logger.info('Diagnosis:')
 
             x_range = [x.min().item(), x.max().item()]
@@ -692,16 +694,16 @@ def train(gpu, opt, output_dir, noises_init):
                 kl_stats['total_bpd_b'].item(),
                 kl_stats['terms_bpd'].item(), kl_stats['prior_bpd_b'].item(), kl_stats['mse_bt'].item()
             ))
-            
+
             if opt.tensorboard:
                 writer.add_scalar('Loss/train', loss.item(), epoch)
                 writer.add_scalar('netPNorm/train',netpNorm, epoch)
-                writer.add_scalar('netGradNorm/train',netgradNorm, epoch)    
+                writer.add_scalar('netGradNorm/train',netgradNorm, epoch)
                 writer.add_scalar('mse_bt/diagnose', kl_stats['mse_bt'].item(), epoch)
                 writer.add_scalar('total_bpd_b/diagnose', kl_stats['total_bpd_b'].item(), epoch)
                 writer.add_scalar('prior_bpd_b/diagnose', kl_stats['prior_bpd_b'].item(), epoch)
                 writer.add_scalar('terms_bpd/diagnose', kl_stats['terms_bpd'].item(), epoch)
-                
+
 
 
 
@@ -771,7 +773,7 @@ def train(gpu, opt, output_dir, noises_init):
 
     if opt.distribution_type == 'multi':
         dist.destroy_process_group()
-        
+
     writer.close()
     logger.info('Training finished!')
 
@@ -814,7 +816,7 @@ def parse_args():
     parser.add_argument('--niter', type=int, default=10000, help='number of epochs to train for')
 
     parser.add_argument('--nc', default=3)
-    parser.add_argument('--npoints', default=2048)
+    parser.add_argument('--npoints', type=int, default=2048)
     '''model'''
     parser.add_argument('--beta_start', default=0.0001)
     parser.add_argument('--beta_end', default=0.02)

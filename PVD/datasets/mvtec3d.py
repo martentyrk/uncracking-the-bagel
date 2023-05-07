@@ -28,11 +28,12 @@ def mvtec3d_classes():
 
 class MVTec3D(Dataset):
 
-    def __init__(self, split, datasets_path, class_name, img_size):
+    def __init__(self, split, datasets_path, class_name, npoints):
         self.IMAGENET_MEAN = [0.485, 0.456, 0.406]
         self.IMAGENET_STD = [0.229, 0.224, 0.225]
         self.cls = class_name
-        self.size = img_size
+        #self.size = img_size
+        self.npoints = npoints
         self.img_path = os.path.join(datasets_path, self.cls, split)
         self.rgb_transform = transforms.Compose(
             [transforms.Resize((224, 224), interpolation=Image.BICUBIC),
@@ -40,8 +41,8 @@ class MVTec3D(Dataset):
              transforms.Normalize(mean=self.IMAGENET_MEAN, std=self.IMAGENET_STD)])
 
 class MVTec3DTrain(MVTec3D):
-    def __init__(self, datasets_path, class_name, img_size):
-        super().__init__(split="train", datasets_path=datasets_path, class_name=class_name, img_size=img_size)
+    def __init__(self, datasets_path, class_name, npoints=None):
+        super().__init__(split="train", datasets_path=datasets_path, class_name=class_name, npoints=npoints)
         self.img_paths, self.labels = self.load_dataset()  # self.labels => good : 0, anomaly : 1
 
     def load_dataset(self):
@@ -70,12 +71,23 @@ class MVTec3DTrain(MVTec3D):
         depth_map_3channel = np.repeat(organized_pc_to_depth_map(organized_pc)[:, :, np.newaxis], 3, axis=2)
         resized_depth_map_3channel = resize_organized_pc(depth_map_3channel)
         resized_organized_pc = resize_organized_pc(organized_pc)
-        return (img, resized_organized_pc, resized_depth_map_3channel), label
+        #return (img, resized_organized_pc, resized_depth_map_3channel), label
+        
+        if self.npoints is not None:
+            tr_idxs = np.random.choice(resized_organized_pc.shape[0], self.npoints)
+            resized_organized_pc = resized_organized_pc[tr_idxs, :]
+        
+        out = {
+            'idx': idx,
+            'train_points': resized_organized_pc,
+            'cate_idx': label,
+        }
+        return out
 
 
 class MVTec3DTest(MVTec3D):
-    def __init__(self, datasets_path, class_name, img_size):
-        super().__init__(split="test", datasets_path=datasets_path, class_name=class_name, img_size=img_size)
+    def __init__(self, datasets_path, class_name, npoints=None):
+        super().__init__(split="test", datasets_path=datasets_path, class_name=class_name, npoints=npoints)
         self.gt_transform = transforms.Compose([
             transforms.Resize((224, 224), interpolation=Image.NEAREST),
             transforms.ToTensor()])
@@ -137,4 +149,15 @@ class MVTec3DTest(MVTec3D):
             gt = self.gt_transform(gt)
             gt = torch.where(gt > 0.5, 1., .0)
 
-        return (img, resized_organized_pc, resized_depth_map_3channel), gt[:1], label
+        #return (img, resized_organized_pc, resized_depth_map_3channel), gt[:1], label
+        
+        if self.npoints is not None:
+            tr_idxs = np.random.choice(resized_organized_pc.shape[0], self.npoints)
+            resized_organized_pc = resized_organized_pc[tr_idxs, :]
+        
+        out = {
+            'idx': idx,
+            'train_points': resized_organized_pc,
+            'cate_idx': label,
+        }
+        return out
