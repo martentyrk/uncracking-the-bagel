@@ -16,6 +16,7 @@ def resize_organized_pc(organized_pc, target_height=224, target_width=224, tenso
     torch_resized_organized_pc = torch.nn.functional.interpolate(torch_organized_pc, size=(target_height, target_width),
                                                                  mode='nearest')
     if tensor_out:
+        torch_resized_organized_pc = torch_resized_organized_pc.flatten(start_dim=2).permute(0, 2, 1)
         return torch_resized_organized_pc.squeeze(dim=0)
     else:
         return torch_resized_organized_pc.squeeze().permute(1, 2, 0).numpy()
