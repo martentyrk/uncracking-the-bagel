@@ -2,7 +2,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
-
+from torch.utils.tensorboard import SummaryWriter
 import argparse
 from torch.distributions import Normal
 
@@ -548,7 +548,7 @@ def get_dataloader(opt, train_dataset, test_dataset=None):
 
 
 def train(gpu, opt, output_dir, noises_init):
-
+    writer = SummaryWriter()
     set_seed(opt)
     logger = setup_logging(output_dir)
     if opt.distribution_type == 'multi':
@@ -600,7 +600,9 @@ def train(gpu, opt, output_dir, noises_init):
     elif opt.distribution_type == 'single':
         def _transform_(m):
             return nn.parallel.DataParallel(m)
-        model = model.cuda()
+        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model = model.device(device)
         model.multi_gpu_wrapper(_transform_)
 
     elif gpu is not None:
@@ -671,11 +673,9 @@ def train(gpu, opt, output_dir, noises_init):
                              .format(
                         epoch, opt.niter, i, len(dataloader),loss.item(),
                     netpNorm, netgradNorm,
-                        ))
-
-
-        if (epoch + 1) % opt.diagIter == 0 and should_diag:
-
+                        ))            
+            
+        if (epoch + 1) % opt.diagIter == 0 and should_diag:            
             logger.info('Diagnosis:')
 
             x_range = [x.min().item(), x.max().item()]
@@ -692,6 +692,16 @@ def train(gpu, opt, output_dir, noises_init):
                 kl_stats['total_bpd_b'].item(),
                 kl_stats['terms_bpd'].item(), kl_stats['prior_bpd_b'].item(), kl_stats['mse_bt'].item()
             ))
+            
+            if opt.tensorboard:
+                writer.add_scalar('Loss/train', loss.item(), epoch)
+                writer.add_scalar('netPNorm/train',netpNorm, epoch)
+                writer.add_scalar('netGradNorm/train',netgradNorm, epoch)    
+                writer.add_scalar('mse_bt/diagnose', kl_stats['mse_bt'].item(), epoch)
+                writer.add_scalar('total_bpd_b/diagnose', kl_stats['total_bpd_b'].item(), epoch)
+                writer.add_scalar('prior_bpd_b/diagnose', kl_stats['prior_bpd_b'].item(), epoch)
+                writer.add_scalar('terms_bpd/diagnose', kl_stats['terms_bpd'].item(), epoch)
+                
 
 
 
@@ -761,6 +771,8 @@ def train(gpu, opt, output_dir, noises_init):
 
     if opt.distribution_type == 'multi':
         dist.destroy_process_group()
+        
+    writer.close()
     logger.info('Training finished!')
 
 def main():
@@ -848,6 +860,7 @@ def parse_args():
     parser.add_argument('--diagIter', default=50, help='unit: epoch')
     parser.add_argument('--vizIter', default=50, help='unit: epoch')
     parser.add_argument('--print_freq', default=50, help='unit: iter')
+    parser.add_argument('--tensorboard', default=True, help="save data to tensorboard for visualizations. Saving will be in accordance to diagIter")
 
     parser.add_argument('--manualSeed', default=42, type=int, help='random seed')
 
