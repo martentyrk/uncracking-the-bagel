@@ -7,10 +7,12 @@
 #SBATCH --cpus-per-task=3
 #SBATCH --time=48:00:00
 #SBATCH --mem=32000M
-#SBATCH --output=../job_logs/bagel_generation_train_%A.out
+#SBATCH --output=bagel_generation_train_%A.out
 
 module purge
 
 source activate pvd
 
-srun python PVD/train_generation.py --dataroot ../PVD/data/ --category bagel
+cd $HOME/repo/PVD
+
+srun python train_generation.py --dataroot $HOME/data/mvtec --category bagel --bs 16 --niter 100
