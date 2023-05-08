@@ -773,6 +773,7 @@ def main():
     exp_id = os.path.splitext(os.path.basename(__file__))[0]
     dir_id = os.path.dirname(__file__)
     output_dir = get_output_dir(dir_id, exp_id)
+    print('Output dir: ', output_dir)
     copy_source(__file__, output_dir)
 
     ''' workaround '''
