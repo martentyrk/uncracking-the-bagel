@@ -17,4 +17,4 @@ source activate pvd
 
 cd $HOME/repo/PVD
 
-srun python train_generation.py --dataroot $HOME/data/mvtec --category bagel --bs 32 --niter 3
+srun python train_generation.py --dataroot $HOME/data/mvtec --category bagel --bs 32 --niter 100
