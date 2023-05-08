@@ -601,8 +601,7 @@ def train(gpu, opt, output_dir, noises_init):
         def _transform_(m):
             return nn.parallel.DataParallel(m)
 
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = model.to(device)
+        model = model.cuda(gpu)
         model.multi_gpu_wrapper(_transform_)
 
     elif gpu is not None:
@@ -873,4 +872,8 @@ def parse_args():
     return opt
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except BaseException as exc:
+        logger.error('Exception occurred!', exc_info=exc)
+        raise exc
