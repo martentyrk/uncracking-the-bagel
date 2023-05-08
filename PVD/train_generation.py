@@ -705,9 +705,7 @@ def train(gpu, opt, output_dir, noises_init):
 
 
 
-
-        if (epoch + 1) % opt.vizIter == 0 and should_diag:
-            logger.info('Generation: eval')
+        if int(epoch + 1) % int(opt.vizIter) == 0 and should_diag:
 
             model.eval()
             with torch.no_grad():

@@ -3,7 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 .vscode
-
+runs/
+PVD/runs/
 # C extensions
 *.so
 DeepSDF/deep_sdf/__pycache__/
