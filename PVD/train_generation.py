@@ -602,7 +602,7 @@ def train(gpu, opt, output_dir, noises_init):
             return nn.parallel.DataParallel(m)
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = model.device(device)
+        model = model.to(device)
         model.multi_gpu_wrapper(_transform_)
 
     elif gpu is not None:
