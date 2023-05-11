@@ -645,7 +645,6 @@ def train(gpu, opt, output_dir, noises_init):
             '''
             train diffusion
             '''
-
             if opt.distribution_type == 'multi' or (opt.distribution_type is None and gpu is not None):
                 x = x.cuda(gpu)
                 noises_batch = noises_batch.cuda(gpu)
@@ -739,13 +738,13 @@ def train(gpu, opt, output_dir, noises_init):
                                        None,
                                        None)
             
-            visualize_pointcloud_samples_3d('%s/epoch_%03d_output.pcd', x_gen_eval.transpose(1, 2), 3)
             
-            #Save the output of the model as pointcloud
-            visualize_pointcloud_samples_3d('%s/epoch_%03d_output.pcd', x_gen_all.transpose(1, 2), 3)
-            
-            #Save the input x as pointcloud
-            visualize_pointcloud_samples_3d('%s/epoch_%03d_target.pcd', x.transpose(1,2), 3)
+            #Save pointcloud files
+            visualize_pointcloud_samples_3d('%s/epoch_%03d_x_gen_eval.pth' % (outf_pcs, epoch),x_gen_eval)
+                
+            visualize_pointcloud_samples_3d('%s/epoch_%03d_x_gen_all.pth'% (outf_pcs, epoch), x_gen_all)
+                
+            visualize_pointcloud_samples_3d('%s/epoch_%03d_target.pth'% (outf_pcs, epoch), x)
             
 
             logger.info('Generation: train')

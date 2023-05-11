@@ -8,6 +8,7 @@ import os
 import trimesh
 from pathlib import Path
 import open3d
+import torch
 
 '''
 Custom visualization
@@ -206,18 +207,13 @@ def visualize_pointcloud_batch(path, pointclouds, pred_labels, labels, categorie
     plt.savefig(path)
     plt.close(fig)
 
-def visualize_pointcloud_samples_3d(path, pointclouds, n_samples=None):
-    batch_size = len(pointclouds)
-    if n_samples == None:
-        n_samples = batch_size
+def visualize_pointcloud_samples_3d(path, pointclouds):
+    pointclouds_copy = pointclouds.detach().clone().cpu()
     
-    for idx, pc in enumerate(pointclouds):
-        if n_samples == idx:
-            break
-        print(pc.shape)
-        pcd = open3d.geometry.PointCloud()
-        pcd.points = open3d.utility.Vector3dVector(pc)
-        open3d.io.write_point_cloud(path, pcd)
+    pointclouds_copy = pointclouds_copy.transpose(1,2).contiguous()
+
+    final_input = torch.cat([pointclouds_copy], dim=0)
+    torch.save(final_input, path)
     
     
 
