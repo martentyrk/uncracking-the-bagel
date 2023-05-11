@@ -557,6 +557,7 @@ def train(gpu, opt, output_dir, noises_init):
         should_diag = True
     if should_diag:
         outf_syn, = setup_output_subdirs(output_dir, 'syn')
+        outf_pcs, = setup_output_subdirs(output_dir, 'pcs')
 
     if opt.distribution_type == 'multi':
         if opt.dist_url == "env://" and opt.rank == -1:
@@ -737,6 +738,13 @@ def train(gpu, opt, output_dir, noises_init):
             visualize_pointcloud_batch('%s/epoch_%03d_x.png' % (outf_syn, epoch), x.transpose(1, 2), None,
                                        None,
                                        None)
+            
+            #Save the output of the model as pointcloud
+            visualize_pointcloud_samples_3d('%s/epoch_%03d_output.pcd', x_gen_all.transpose(1, 2), 3)
+            
+            #Save the input x as pointcloud
+            visualize_pointcloud_samples_3d('%s/epoch_%03d_target.pcd', x.transpose(1,2), 3)
+            
 
             logger.info('Generation: train')
             model.train()

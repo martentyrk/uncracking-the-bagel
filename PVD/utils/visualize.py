@@ -7,6 +7,7 @@ import numpy as np
 import os
 import trimesh
 from pathlib import Path
+import open3d
 
 '''
 Custom visualization
@@ -205,6 +206,18 @@ def visualize_pointcloud_batch(path, pointclouds, pred_labels, labels, categorie
     plt.savefig(path)
     plt.close(fig)
 
+def visualize_pointcloud_samples_3d(path, pointclouds, n_samples=None):
+    batch_size = len(pointclouds)
+    if n_samples == None:
+        n_samples = batch_size
+    
+    for idx, pc in enumerate(pointclouds):
+        if n_samples == idx:
+            break
+        
+        open3d.io.write_point_cloud(path, pc)
+    
+    
 
 '''
 Plot stats
