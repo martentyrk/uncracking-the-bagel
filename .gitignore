@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .vscode
+datasets/
 runs/
 PVD/runs/
 # C extensions
