@@ -739,6 +739,8 @@ def train(gpu, opt, output_dir, noises_init):
                                        None,
                                        None)
             
+            visualize_pointcloud_samples_3d('%s/epoch_%03d_output.pcd', x_gen_eval.transpose(1, 2), 3)
+            
             #Save the output of the model as pointcloud
             visualize_pointcloud_samples_3d('%s/epoch_%03d_output.pcd', x_gen_all.transpose(1, 2), 3)
             

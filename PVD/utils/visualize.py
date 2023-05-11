@@ -214,8 +214,10 @@ def visualize_pointcloud_samples_3d(path, pointclouds, n_samples=None):
     for idx, pc in enumerate(pointclouds):
         if n_samples == idx:
             break
-        
-        open3d.io.write_point_cloud(path, pc)
+        print(pc.shape)
+        pcd = open3d.geometry.PointCloud()
+        pcd.points = open3d.utility.Vector3dVector(pc)
+        open3d.io.write_point_cloud(path, pcd)
     
     
 
