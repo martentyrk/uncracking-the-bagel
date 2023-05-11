@@ -2,11 +2,11 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 import os
 import trimesh
 from pathlib import Path
+import torch
 
 '''
 Custom visualization
@@ -205,6 +205,15 @@ def visualize_pointcloud_batch(path, pointclouds, pred_labels, labels, categorie
     plt.savefig(path)
     plt.close(fig)
 
+def visualize_pointcloud_samples_3d(path, pointclouds):
+    pointclouds_copy = pointclouds.detach().clone().cpu()
+    
+    pointclouds_copy = pointclouds_copy.transpose(1,2).contiguous()
+
+    final_input = torch.cat([pointclouds_copy], dim=0)
+    torch.save(final_input, path)
+    
+    
 
 '''
 Plot stats
