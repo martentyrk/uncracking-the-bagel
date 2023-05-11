@@ -51,13 +51,8 @@ def resize_organized_pc(organized_pc, target_height=224, target_width=224, tenso
 # New code ===============================================================
 
 
-def organized_pc_to_array(organized_pc, limit=0.1):
-    height, width = organized_pc.shape[1], organized_pc.shape[2]
-    depth = organized_pc[2, :, :]
-    x_ = np.linspace(-limit, limit, width)
-    y_ = np.linspace(-limit, limit, height)
-    x, y = np.meshgrid(x_, y_)
-    pc = np.vstack((x.flatten(), y.flatten(), depth.flatten())).transpose()
+def organized_pc_to_array(organized_pc):
+    pc = organized_pc.numpy().reshape(3,-1).transpose()
     return pc
 
 
@@ -67,8 +62,10 @@ def img_to_color_array(img):
     return colors
 
 
-def threshold_points_colors(points, colors, threshold=0.5):
-    return points[points[:, 2] > threshold], colors[points[:, 2] > threshold]
+def get_nonzero_points_colors(points, colors):
+    p = points
+    nonzero = (p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)
+    return p[nonzero], colors[nonzero]
 
 
 def get_points_colors(rgb_path, tiff_path):
@@ -78,7 +75,7 @@ def get_points_colors(rgb_path, tiff_path):
     resized_organized_pc = resize_organized_pc(organized_pc)
     points = organized_pc_to_array(resized_organized_pc)
     colors = img_to_color_array(img)
-    points, colors = threshold_points_colors(points, colors)
+    points, colors = get_nonzero_points_colors(points, colors)
     return points, colors
 
 
