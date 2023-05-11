@@ -74,8 +74,10 @@ class MVTec3DTrain(MVTec3D):
         #return (img, resized_organized_pc, resized_depth_map_3channel), label
         
         if self.npoints is not None:
-            tr_idxs = np.random.choice(resized_organized_pc.shape[0], self.npoints)
-            resized_organized_pc = resized_organized_pc[tr_idxs, :]
+            p = resized_organized_pc
+            p = p[(p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)]
+            tr_idxs = np.random.choice(p.shape[0], self.npoints)
+            resized_organized_pc = p[tr_idxs, :]
         
         out = {
             'idx': idx,
@@ -152,8 +154,10 @@ class MVTec3DTest(MVTec3D):
         #return (img, resized_organized_pc, resized_depth_map_3channel), gt[:1], label
         
         if self.npoints is not None:
-            tr_idxs = np.random.choice(resized_organized_pc.shape[0], self.npoints)
-            resized_organized_pc = resized_organized_pc[tr_idxs, :]
+            p = resized_organized_pc
+            p = p[(p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)]
+            tr_idxs = np.random.choice(p.shape[0], self.npoints)
+            resized_organized_pc = p[tr_idxs, :]
         
         out = {
             'idx': idx,
