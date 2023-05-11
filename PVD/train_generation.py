@@ -2,7 +2,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
-
+from torch.utils.tensorboard import SummaryWriter
 import argparse
 from torch.distributions import Normal
 
@@ -11,6 +11,7 @@ from utils.visualize import *
 from model.pvcnn_generation import PVCNN2Base
 import torch.distributed as dist
 from datasets.shapenet_data_pc import ShapeNet15kPointClouds
+from datasets.mvtec3d import MVTec3DTrain, MVTec3DTest
 
 '''
 some utils
@@ -488,6 +489,11 @@ def get_betas(schedule_type, b_start, b_end, time_num):
 
 
 def get_dataset(dataroot, npoints,category):
+    if category == 'bagel':
+        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints)
+        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints)
+        return tr_dataset, te_dataset
+
     tr_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
         categories=[category], split='train',
         tr_sample_size=npoints,
@@ -542,7 +548,7 @@ def get_dataloader(opt, train_dataset, test_dataset=None):
 
 
 def train(gpu, opt, output_dir, noises_init):
-
+    writer = SummaryWriter()
     set_seed(opt)
     logger = setup_logging(output_dir)
     if opt.distribution_type == 'multi':
@@ -594,7 +600,8 @@ def train(gpu, opt, output_dir, noises_init):
     elif opt.distribution_type == 'single':
         def _transform_(m):
             return nn.parallel.DataParallel(m)
-        model = model.cuda()
+
+        model = model.cuda(gpu)
         model.multi_gpu_wrapper(_transform_)
 
     elif gpu is not None:
@@ -629,8 +636,6 @@ def train(gpu, opt, output_dir, noises_init):
 
         if opt.distribution_type == 'multi':
             train_sampler.set_epoch(epoch)
-
-        lr_scheduler.step(epoch)
 
         for i, data in enumerate(dataloader):
             x = data['train_points'].transpose(1,2)
@@ -667,6 +672,8 @@ def train(gpu, opt, output_dir, noises_init):
                     netpNorm, netgradNorm,
                         ))
 
+            lr_scheduler.step()
+
 
         if (epoch + 1) % opt.diagIter == 0 and should_diag:
 
@@ -687,10 +694,18 @@ def train(gpu, opt, output_dir, noises_init):
                 kl_stats['terms_bpd'].item(), kl_stats['prior_bpd_b'].item(), kl_stats['mse_bt'].item()
             ))
 
+            if opt.tensorboard:
+                writer.add_scalar('Loss/train', loss.item(), epoch)
+                writer.add_scalar('netPNorm/train',netpNorm, epoch)
+                writer.add_scalar('netGradNorm/train',netgradNorm, epoch)
+                writer.add_scalar('mse_bt/diagnose', kl_stats['mse_bt'].item(), epoch)
+                writer.add_scalar('total_bpd_b/diagnose', kl_stats['total_bpd_b'].item(), epoch)
+                writer.add_scalar('prior_bpd_b/diagnose', kl_stats['prior_bpd_b'].item(), epoch)
+                writer.add_scalar('terms_bpd/diagnose', kl_stats['terms_bpd'].item(), epoch)
 
 
-        if (epoch + 1) % opt.vizIter == 0 and should_diag:
-            logger.info('Generation: eval')
+
+        if int(epoch + 1) % int(opt.vizIter) == 0 and should_diag:
 
             model.eval()
             with torch.no_grad():
@@ -753,7 +768,11 @@ def train(gpu, opt, output_dir, noises_init):
                 model.load_state_dict(
                     torch.load('%s/epoch_%d.pth' % (output_dir, epoch), map_location=map_location)['model_state'])
 
-    dist.destroy_process_group()
+    if opt.distribution_type == 'multi':
+        dist.destroy_process_group()
+
+    writer.close()
+    logger.info('Training finished!')
 
 def main():
     opt = parse_args()
@@ -765,6 +784,7 @@ def main():
     exp_id = os.path.splitext(os.path.basename(__file__))[0]
     dir_id = os.path.dirname(__file__)
     output_dir = get_output_dir(dir_id, exp_id)
+    print('Output dir: ', output_dir)
     copy_source(__file__, output_dir)
 
     ''' workaround '''
@@ -794,7 +814,7 @@ def parse_args():
     parser.add_argument('--niter', type=int, default=10000, help='number of epochs to train for')
 
     parser.add_argument('--nc', default=3)
-    parser.add_argument('--npoints', default=2048)
+    parser.add_argument('--npoints', type=int, default=2048)
     '''model'''
     parser.add_argument('--beta_start', default=0.0001)
     parser.add_argument('--beta_end', default=0.02)
@@ -836,10 +856,11 @@ def parse_args():
                         help='GPU id to use. None means using all available GPUs.')
 
     '''eval'''
-    parser.add_argument('--saveIter', default=100, help='unit: epoch')
-    parser.add_argument('--diagIter', default=50, help='unit: epoch')
-    parser.add_argument('--vizIter', default=50, help='unit: epoch')
-    parser.add_argument('--print_freq', default=50, help='unit: iter')
+    parser.add_argument('--saveIter', type=int, default=100, help='unit: epoch')
+    parser.add_argument('--diagIter', type=int, default=50, help='unit: epoch')
+    parser.add_argument('--vizIter', type=int, default=50, help='unit: epoch')
+    parser.add_argument('--print_freq', type=int, default=50, help='unit: iter')
+    parser.add_argument('--tensorboard', default=True, help="save data to tensorboard for visualizations. Saving will be in accordance to diagIter")
 
     parser.add_argument('--manualSeed', default=42, type=int, help='random seed')
 
@@ -849,4 +870,8 @@ def parse_args():
     return opt
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except BaseException as exc:
+        logger.error('Exception occurred!', exc_info=exc)
+        raise exc

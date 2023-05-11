@@ -3,7 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 .vscode
-
+runs/
+PVD/runs/
 # C extensions
 *.so
 DeepSDF/deep_sdf/__pycache__/
@@ -27,6 +28,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+datasets/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
