@@ -31,6 +31,8 @@ class MVTec3D(Dataset):
     def __init__(self, split, datasets_path, class_name, npoints):
         self.IMAGENET_MEAN = [0.485, 0.456, 0.406]
         self.IMAGENET_STD = [0.229, 0.224, 0.225]
+        self.BAGEL_MEAN = [0.02803007, -0.01059183, 0.51991437]
+        self.BAGEL_STD = [0.02647153, 0.02599377, 0.00973472]
         self.cls = class_name
         #self.size = img_size
         self.npoints = npoints
@@ -78,6 +80,9 @@ class MVTec3DTrain(MVTec3D):
             p = p[(p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)]
             tr_idxs = np.random.choice(p.shape[0], self.npoints)
             resized_organized_pc = p[tr_idxs, :]
+            means = torch.tensor(self.BAGEL_MEAN, device=resized_organized_pc.device)
+            stds = torch.tensor(self.BAGEL_STD, device=resized_organized_pc.device)
+            resized_organized_pc = (resized_organized_pc - means) / stds
         
         out = {
             'idx': idx,
@@ -158,6 +163,9 @@ class MVTec3DTest(MVTec3D):
             p = p[(p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)]
             tr_idxs = np.random.choice(p.shape[0], self.npoints)
             resized_organized_pc = p[tr_idxs, :]
+            means = torch.tensor(self.BAGEL_MEAN, device=resized_organized_pc.device)
+            stds = torch.tensor(self.BAGEL_STD, device=resized_organized_pc.device)
+            resized_organized_pc = (resized_organized_pc - means) / stds
         
         out = {
             'idx': idx,
