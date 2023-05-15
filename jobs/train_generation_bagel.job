@@ -13,4 +13,4 @@ module purge
 
 source activate pvd
 
-srun python PVD/train_generation.py --dataroot ../PVD/data/ --category bagel --vizIter 6 --diagIter 10 --niter 19
+srun python PVD/train_generation.py --dataroot ../PVD/data/ --category bagel --npoints 5000 --niter 2500

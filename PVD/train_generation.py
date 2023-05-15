@@ -2,10 +2,10 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
-from torch.utils.tensorboard import SummaryWriter
 import argparse
 from torch.distributions import Normal
 
+import wandb
 from utils.file_utils import *
 from utils.visualize import *
 from model.pvcnn_generation import PVCNN2Base
@@ -548,7 +548,6 @@ def get_dataloader(opt, train_dataset, test_dataset=None):
 
 
 def train(gpu, opt, output_dir, noises_init):
-    writer = SummaryWriter()
     set_seed(opt)
     logger = setup_logging(output_dir)
     if opt.distribution_type == 'multi':
@@ -661,6 +660,10 @@ def train(gpu, opt, output_dir, noises_init):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)
 
             optimizer.step()
+            
+            wandb.log({'Loss/train': loss.item(),
+                       'netPNorm/train': netpNorm,
+                       'netGradNorm/train': netgradNorm})
 
 
             if i % opt.print_freq == 0 and should_diag:
@@ -694,15 +697,10 @@ def train(gpu, opt, output_dir, noises_init):
                 kl_stats['terms_bpd'].item(), kl_stats['prior_bpd_b'].item(), kl_stats['mse_bt'].item()
             ))
 
-            if opt.tensorboard:
-                writer.add_scalar('Loss/train', loss.item(), epoch)
-                writer.add_scalar('netPNorm/train',netpNorm, epoch)
-                writer.add_scalar('netGradNorm/train',netgradNorm, epoch)
-                writer.add_scalar('mse_bt/diagnose', kl_stats['mse_bt'].item(), epoch)
-                writer.add_scalar('total_bpd_b/diagnose', kl_stats['total_bpd_b'].item(), epoch)
-                writer.add_scalar('prior_bpd_b/diagnose', kl_stats['prior_bpd_b'].item(), epoch)
-                writer.add_scalar('terms_bpd/diagnose', kl_stats['terms_bpd'].item(), epoch)
-
+            wandb.log({'total_bpd_b/diagnose': kl_stats['total_bpd_b'].item(),
+                       'mse_bt/diagnose':kl_stats['mse_bt'].item(),
+                       'prior_bpd_b/diagnose': kl_stats['prior_bpd_b'].item(),
+                       'terms_bpd/diagnose': kl_stats['terms_bpd'].item()})
 
 
         if int(epoch + 1) % int(opt.vizIter) == 0 and should_diag:
@@ -750,13 +748,6 @@ def train(gpu, opt, output_dir, noises_init):
             logger.info('Generation: train')
             model.train()
 
-
-
-
-
-
-
-
         if (epoch + 1) % opt.saveIter == 0:
 
             if should_diag:
@@ -784,6 +775,19 @@ def train(gpu, opt, output_dir, noises_init):
     logger.info('Training finished!')
 
 def main():
+    
+    wandb.init(
+    # set the wandb project where this run will be logged
+    project="pvd-bagel",
+    
+    # track hyperparameters and run metadata
+    config={
+    "dataset": "bagels",
+    "epochs": 5000,
+    'normalize': 'no',
+    }
+)
+    
     opt = parse_args()
     if opt.category == 'airplane':
         opt.beta_start = 1e-5
@@ -810,6 +814,7 @@ def main():
     else:
         train(opt.gpu, opt, output_dir, noises_init)
 
+    wandb.finish()
 
 
 def parse_args():
