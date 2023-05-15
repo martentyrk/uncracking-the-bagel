@@ -43,9 +43,10 @@ class MVTec3D(Dataset):
              transforms.Normalize(mean=self.IMAGENET_MEAN, std=self.IMAGENET_STD)])
 
 class MVTec3DTrain(MVTec3D):
-    def __init__(self, datasets_path, class_name, npoints=None):
+    def __init__(self, datasets_path, class_name, npoints=None, normalize=True):
         super().__init__(split="train", datasets_path=datasets_path, class_name=class_name, npoints=npoints)
         self.img_paths, self.labels = self.load_dataset()  # self.labels => good : 0, anomaly : 1
+        self.normalize = normalize
 
     def load_dataset(self):
         img_tot_paths = []
@@ -80,9 +81,11 @@ class MVTec3DTrain(MVTec3D):
             p = p[(p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)]
             tr_idxs = np.random.choice(p.shape[0], self.npoints)
             resized_organized_pc = p[tr_idxs, :]
-            means = torch.tensor(self.BAGEL_MEAN, device=resized_organized_pc.device)
-            stds = torch.tensor(self.BAGEL_STD, device=resized_organized_pc.device)
-            resized_organized_pc = (resized_organized_pc - means) / stds
+            
+            if self.normalize:
+                means = torch.tensor(self.BAGEL_MEAN, device=resized_organized_pc.device)
+                stds = torch.tensor(self.BAGEL_STD, device=resized_organized_pc.device)
+                resized_organized_pc = (resized_organized_pc - means) / stds
         
         out = {
             'idx': idx,

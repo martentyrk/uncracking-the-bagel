@@ -7,22 +7,22 @@ from utils.mvtec3d_util import *
 from torch.utils.data import DataLoader
 import numpy as np
 
-DATASETS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../datasets', 'mvtec3d'))
+DATASETS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '/home/lcur0949/PVD/data', 'mvtec3d'))
 
 
 
 def mvtec3d_classes():
     return [
         "bagel",
-        "cable_gland",
-        "carrot",
-        "cookie",
-        "dowel",
-        "foam",
-        "peach",
-        "potato",
-        "rope",
-        "tire",
+        # "cable_gland",
+        # "carrot",
+        # "cookie",
+        # "dowel",
+        # "foam",
+        # "peach",
+        # "potato",
+        # "rope",
+        # "tire",
     ]
 
 
@@ -98,13 +98,13 @@ class MVTec3DTest(MVTec3D):
                 gt_tot_paths.extend([0] * len(sample_paths))
                 tot_labels.extend([0] * len(sample_paths))
             else:
-                rgb_paths = glob.glob(os.path.join(self.img_path, defect_type, 'rgb') + "/*.png")
+                # rgb_paths = glob.glob(os.path.join(self.img_path, defect_type, 'rgb') + "/*.png")
                 tiff_paths = glob.glob(os.path.join(self.img_path, defect_type, 'xyz') + "/*.tiff")
                 gt_paths = glob.glob(os.path.join(self.img_path, defect_type, 'gt') + "/*.png")
-                rgb_paths.sort()
+                # rgb_paths.sort()
                 tiff_paths.sort()
                 gt_paths.sort()
-                sample_paths = list(zip(rgb_paths, tiff_paths))
+                sample_paths = list(tiff_paths)
 
                 img_tot_paths.extend(sample_paths)
                 gt_tot_paths.extend(gt_paths)

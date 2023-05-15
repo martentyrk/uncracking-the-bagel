@@ -81,20 +81,10 @@ class Features(torch.nn.Module):
         s_map = torch.nn.functional.interpolate(s_map, size=(self.image_size, self.image_size), mode='bilinear')
         s_map = self.blur(s_map)
 
-        self.image_preds.append(s.numpy())
-        self.image_labels.append(label)
-        self.pixel_preds.extend(s_map.flatten().numpy())
-        self.pixel_labels.extend(mask.flatten().numpy())
         self.predictions.append(s_map.detach().cpu().squeeze().numpy())
         self.gts.append(mask.detach().cpu().squeeze().numpy())
 
     def calculate_metrics(self):
-        self.image_preds = np.stack(self.image_preds)
-        self.image_labels = np.stack(self.image_labels)
-        self.pixel_preds = np.array(self.pixel_preds)
-
-        self.image_rocauc = roc_auc_score(self.image_labels, self.image_preds)
-        self.pixel_rocauc = roc_auc_score(self.pixel_labels, self.pixel_preds)
         self.au_pro, _ = calculate_au_pro(self.gts, self.predictions)
 
     def run_coreset(self):

@@ -488,9 +488,9 @@ def get_betas(schedule_type, b_start, b_end, time_num):
     return betas
 
 
-def get_dataset(dataroot, npoints,category):
+def get_dataset(dataroot, npoints,category, normalize):
     if category == 'bagel':
-        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints)
+        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints, normalize=normalize)
         te_dataset = MVTec3DTest(dataroot, 'bagel', npoints)
         return tr_dataset, te_dataset
 
@@ -576,7 +576,7 @@ def train(gpu, opt, output_dir, noises_init):
 
 
     ''' data '''
-    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category)
+    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize)
     dataloader, _, train_sampler, _ = get_dataloader(opt, train_dataset, None)
 
 
@@ -801,7 +801,7 @@ def main():
     copy_source(__file__, output_dir)
 
     ''' workaround '''
-    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category)
+    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize)
     noises_init = torch.randn(len(train_dataset), opt.npoints, opt.nc)
 
     if opt.dist_url == "env://" and opt.world_size == -1:
@@ -875,9 +875,8 @@ def parse_args():
     parser.add_argument('--vizIter', type=int, default=50, help='unit: epoch')
     parser.add_argument('--print_freq', type=int, default=50, help='unit: iter')
     parser.add_argument('--tensorboard', default=True, help="save data to tensorboard for visualizations. Saving will be in accordance to diagIter")
-
+    parser.add_argument('--normalize', default=True, type=bool, help='normalize training data or not')
     parser.add_argument('--manualSeed', default=42, type=int, help='random seed')
-
 
     opt = parser.parse_args()
 
