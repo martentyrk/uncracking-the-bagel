@@ -4,26 +4,38 @@ src:
     https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md
     https://pytorch.org/get-started/locally/
 
-install:
-    conda create -n chamfer python=3.9
+setup:
+    conda create -n chamfer python=3.8
     conda activate chamfer
-    conda install pytorch=1.13.0 torchvision pytorch-cuda=11.6 -c pytorch -c nvidia
-    conda install -c fvcore -c iopath -c conda-forge fvcore iopath
 
-    conda install -c bottler nvidiacub
+    # install pytorch3d
+    pip install torch==1.10.0
+    pip install pytorch==1.10.0
 
-    conda install pytorch3d -c pytorch3d
+    sudo apt install g++
+    sudo apt install build-essential
+    sudo apt-get install manpages-dev
 
-    conda install pytorch-cuda=11.7 -c pytorch -c nvidia
+    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+    conda install -c pytorch3d pytorch3d
 
+    # install chamfer_distance
     pip install git+'https://github.com/otaheri/chamfer_distance'
 
-    conda install pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia
+    #https://github.com/facebookresearch/maskrcnn-benchmark/issues/891
+    pip install torch==2.0.0+cu118 torchvision==0.7.0+cu118 -f https://download.pytorch.org/whl/torch_stable.html
+    pip install -U torch torchvision --no-cache-dir
 """
+import numpy as np
+
 #from chamfer_distance import ChamferDistance
 #from PVD.metrics.ChamferDistancePytorch.chamfer3D.dist_chamfer_3D import chamfer_3DDist
+from PVD.metrics.ChamferDistancePytorch.chamfer_python import distChamfer
 import torch
 import matplotlib.pyplot as plt
+from PIL import Image
+import tifffile as tiff
+
 
 
 def get_pc_xy(pc):
@@ -53,6 +65,7 @@ def chamfer_dist_per_point(gt_pc, pred_pc):
 
     #chd = ChamferDistance()
     #chd = chamfer_3DDist()
+    a = distChamfer(gt_pc, pred_pc)
     dist1, dist2, idx1, idx2 = chd(gt_pc, pred_pc)
     print(dist1.shape, dist2.shape, idx1.shape, idx2.shape)
 
@@ -183,14 +196,72 @@ def plot_mask(mask):
     :param mask: single mask array
     :return: None
     """
+    plt.figure()
     plt.imshow(mask, cmap='gray', vmin=0, vmax=1)
     plt.axis('off')
     plt.show()
 
 
+def resize_organized_pc(organized_pc, target_height=224, target_width=224, tensor_out=True):
+    torch_organized_pc = torch.tensor(organized_pc).permute(2, 0, 1).unsqueeze(dim=0)
+    torch_resized_organized_pc = torch.nn.functional.interpolate(torch_organized_pc, size=(target_height, target_width),
+                                                                 mode='nearest')
+    if tensor_out:
+        return torch_resized_organized_pc.squeeze(dim=0)
+    else:
+        return torch_resized_organized_pc.squeeze().permute(1, 2, 0).numpy()
+
+
+def get_nonzero_points(pc):
+    nonzero = (pc[:,0] != 0) & (pc[:,1] != 0) & (pc[:,2] != 0)
+    return pc[nonzero]
+
+
+def get_pc(tiff_path):
+    tiff_img = tiff.imread(tiff_path)
+    resized_organized_pc = resize_organized_pc(tiff_img)
+    pc = resized_organized_pc.numpy().reshape(3, -1).transpose()
+    pc = get_nonzero_points(pc)
+    return pc
+
+
+def apply_dummy_anomaly(pc):
+    """
+    Apply ellipse anomaly to point cloud.
+    u,v - ellipse center, random within the point cloud limits
+    t - ellipse angle, random
+    a,b - ellipse axes, random within the point cloud limits (between 1/32 and 1/16 of the point cloud limits)
+
+    :param pc: array with shape (num_points, 3)
+    :return:
+    """
+    pc = pc.copy()
+    xmin, ymin = pc.min(axis=0)[:2]
+    xmax, ymax = pc.max(axis=0)[:2]
+    width, height = xmax - xmin, ymax - ymin
+    u = np.random.uniform(xmin, xmax)
+    v = np.random.uniform(ymin, ymax)
+    t = np.random.uniform(0, 2*np.pi)
+    a = np.random.uniform(width/32, width/16)
+    b = np.random.uniform(height/32, height/16)
+    x, y = pc[:, 0], pc[:, 1]
+    where = ((x-u)*np.cos(t) + (y-v)*np.sin(t))**2 / a**2 + ((x-u)*np.sin(t) - (y-v)*np.cos(t))**2 / b**2 <= 1
+    pc[where, 2] -= 0.05
+    return pc
+
+
 if __name__ == '__main__':
-    pc1 = torch.rand(100, 3)
-    pc2 = torch.rand(200, 3)
+    pc = get_pc('data/example/000.tiff')
+    ano_pc = apply_dummy_anomaly(pc)
+    plt.figure()
+    plt.scatter(ano_pc[:, 0], ano_pc[:, 1], s=0.1, c=ano_pc[:, 2])
+    plt.colorbar()
+    plt.show()
+    pc1 = torch.tensor(pc)
+    pc2 = torch.tensor(ano_pc)
+
+    # pc1 = torch.rand(100, 3)
+    # pc2 = torch.rand(200, 3)
     xy = get_pc_xy(pc1)
     cd = chamfer_dist_per_point(pc1, pc2)
     bmin, bmax = get_gt_bbox(pc1)
@@ -199,5 +270,5 @@ if __name__ == '__main__':
         mask = masks[0]
     else:
         mask = masks
-    mask = normalize_mask(mask, 'threshold')
+    #mask = normalize_mask(mask, 'tanh')
     plot_mask(mask)

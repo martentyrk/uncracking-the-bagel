@@ -27,14 +27,14 @@ def distChamfer(a, b):
     Works for pointcloud of any dimension
     """
     x, y = a.double(), b.double()
-    bs, num_points_x, points_dim = x.size()
-    bs, num_points_y, points_dim = y.size()
+    bsx, num_points_x, points_dim = x.size()
+    bsy, num_points_y, points_dim = y.size()
 
     xx = torch.pow(x, 2).sum(2)
     yy = torch.pow(y, 2).sum(2)
     zz = torch.bmm(x, y.transpose(2, 1))
-    rx = xx.unsqueeze(1).expand(bs, num_points_y, num_points_x) # Diagonal elements xx
-    ry = yy.unsqueeze(1).expand(bs, num_points_x, num_points_y) # Diagonal elements yy
+    rx = xx.unsqueeze(1).expand(bsx, num_points_y, num_points_x) # Diagonal elements xx
+    ry = yy.unsqueeze(1).expand(bsy, num_points_x, num_points_y) # Diagonal elements yy
     P = rx.transpose(2, 1) + ry - 2 * zz
     return torch.min(P, 2)[0].float(), torch.min(P, 1)[0].float(), torch.min(P, 2)[1].int(), torch.min(P, 1)[1].int()
 
