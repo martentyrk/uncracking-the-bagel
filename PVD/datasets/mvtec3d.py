@@ -80,6 +80,8 @@ class MVTec3DTrain(MVTec3D):
         if self.npoints is not None:
             if self.grid_downsample:
                 p = resized_organized_pc
+                # only keep points that are part of the bagel.
+                p = p[(p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)]
                 pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(p)
                 resized_organized_pc = pcd.voxel_down_sample(voxel_size=0.02)
