@@ -771,10 +771,11 @@ def train(gpu, opt, output_dir, noises_init):
     if opt.distribution_type == 'multi':
         dist.destroy_process_group()
 
-    writer.close()
     logger.info('Training finished!')
 
 def main():
+    
+    opt = parse_args()
     
     wandb.init(
     # set the wandb project where this run will be logged
@@ -783,12 +784,16 @@ def main():
     # track hyperparameters and run metadata
     config={
     "dataset": "bagels",
-    "epochs": 5000,
-    'normalize': 'no',
+    "epochs": opt.niter,
+    "points": opt.npoints,
+    'normalize': False,
     }
 )
     
-    opt = parse_args()
+    print('normalize parameter', opt.normalize)
+    if opt.normalize:
+        opt.normalize = False
+        
     if opt.category == 'airplane':
         opt.beta_start = 1e-5
         opt.beta_end = 0.008
@@ -874,8 +879,7 @@ def parse_args():
     parser.add_argument('--diagIter', type=int, default=50, help='unit: epoch')
     parser.add_argument('--vizIter', type=int, default=50, help='unit: epoch')
     parser.add_argument('--print_freq', type=int, default=50, help='unit: iter')
-    parser.add_argument('--tensorboard', default=True, help="save data to tensorboard for visualizations. Saving will be in accordance to diagIter")
-    parser.add_argument('--normalize', default=True, type=bool, help='normalize training data or not')
+    parser.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--manualSeed', default=42, type=int, help='random seed')
 
     opt = parser.parse_args()
