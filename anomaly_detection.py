@@ -108,6 +108,9 @@ def get_pc(tiff_path, target_height, target_width):
     tiff_img = tiff.imread(tiff_path)
     pc, pixel_indices = resize_organized_pc(tiff_img, target_height, target_width)
     pc, pixel_indices = get_nonzero_points(pc, pixel_indices)
+    means = np.array([0.02803007, -0.01059183, 0.51991437])
+    stds = np.array([0.02647153, 0.02599377, 0.00973472])
+    pc = (pc - means) / stds
     return pc, pixel_indices
 
 
@@ -134,7 +137,7 @@ def apply_dummy_anomaly(pc, pixel_indices, img, target_height, target_width):
     where = ((x - u) * np.cos(t) + (y - v) * np.sin(t)) ** 2 / a**2 + (
         (x - u) * np.sin(t) - (y - v) * np.cos(t)
     ) ** 2 / b**2 <= 1
-    pc[where, 2] -= 0.05
+    pc[where, 2] += 10
     gt_mask = np.zeros((target_height, target_width))
     for xy in pixel_indices[where]:
         gt_mask[xy[1], xy[0]] = 1
@@ -162,7 +165,7 @@ if __name__ == "__main__":
     mask = predicted_anomaly_mask(pixel_indices, cd, target_height, target_width)
 
     f, axes = plt.subplots(1, 4, figsize=(20, 5))
-    axes[0].scatter(ano_pc[:, 0], ano_pc[:, 1], s=0.1, c=ano_pc[:, 2])
+    axes[0].scatter(ano_pc[:, 0], -ano_pc[:, 1], s=0.1, c=ano_pc[:, 2])
     axes[1].imshow(img)
     axes[2].imshow(gt_mask, cmap="gray", vmin=0, vmax=1)
     axes[3].imshow(mask, cmap="gray", vmin=0, vmax=1)
