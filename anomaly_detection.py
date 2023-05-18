@@ -159,8 +159,6 @@ if __name__ == "__main__":
     pc2 = torch.tensor(ano_pc)
     cd = chamfer_dist_per_point(pc1, pc2)
 
-    print(cd.min(), cd.max())
-
     mask = predicted_anomaly_mask(pixel_indices, cd, target_height, target_width)
 
     f, axes = plt.subplots(1, 4, figsize=(20, 5))
