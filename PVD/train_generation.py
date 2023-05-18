@@ -488,10 +488,10 @@ def get_betas(schedule_type, b_start, b_end, time_num):
     return betas
 
 
-def get_dataset(dataroot, npoints,category, normalize):
+def get_dataset(dataroot, npoints,category, normalize, grid_downsample):
     if category == 'bagel':
-        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints, normalize=normalize)
-        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints)
+        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints, normalize=normalize, grid_downsample=grid_downsample)
+        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints, grid_downsample=grid_downsample)
         return tr_dataset, te_dataset
 
     tr_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
@@ -576,7 +576,7 @@ def train(gpu, opt, output_dir, noises_init):
 
 
     ''' data '''
-    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize)
+    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize, opt.grid_downsample)
     dataloader, _, train_sampler, _ = get_dataloader(opt, train_dataset, None)
 
 
@@ -661,9 +661,9 @@ def train(gpu, opt, output_dir, noises_init):
 
             optimizer.step()
             
-            wandb.log({'Loss/train': loss.item(),
-                       'netPNorm/train': netpNorm,
-                       'netGradNorm/train': netgradNorm})
+            # wandb.log({'Loss/train': loss.item(),
+            #            'netPNorm/train': netpNorm,
+            #            'netGradNorm/train': netgradNorm})
 
 
             if i % opt.print_freq == 0 and should_diag:
@@ -776,24 +776,20 @@ def train(gpu, opt, output_dir, noises_init):
 def main():
     
     opt = parse_args()
+    #     wandb.init(
+    #         # set the wandb project where this run will be logged
+    #         project="pvd-bagel",
+            
+    #         # track hyperparameters and run metadata
+    #         config={
+    #         "dataset": "bagels",
+    #         "epochs": opt.niter,
+    #         "points": opt.npoints,
+    #         'normalize': False,
+    #         }
+    #     )
     
-    wandb.init(
-    # set the wandb project where this run will be logged
-    project="pvd-bagel",
     
-    # track hyperparameters and run metadata
-    config={
-    "dataset": "bagels",
-    "epochs": opt.niter,
-    "points": opt.npoints,
-    'normalize': False,
-    }
-)
-    
-    print('normalize parameter', opt.normalize)
-    if opt.normalize:
-        opt.normalize = False
-        
     if opt.category == 'airplane':
         opt.beta_start = 1e-5
         opt.beta_end = 0.008
@@ -806,7 +802,7 @@ def main():
     copy_source(__file__, output_dir)
 
     ''' workaround '''
-    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize)
+    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize, opt.grid_downsample)
     noises_init = torch.randn(len(train_dataset), opt.npoints, opt.nc)
 
     if opt.dist_url == "env://" and opt.world_size == -1:
@@ -819,7 +815,7 @@ def main():
     else:
         train(opt.gpu, opt, output_dir, noises_init)
 
-    wandb.finish()
+    # wandb.finish()
 
 
 def parse_args():
@@ -879,8 +875,9 @@ def parse_args():
     parser.add_argument('--diagIter', type=int, default=50, help='unit: epoch')
     parser.add_argument('--vizIter', type=int, default=50, help='unit: epoch')
     parser.add_argument('--print_freq', type=int, default=50, help='unit: iter')
-    parser.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--normalize", action='store_true', help='When you pass this down, we will normalize input.')
     parser.add_argument('--manualSeed', default=42, type=int, help='random seed')
+    parser.add_argument('--grid_downsample', action='store_true', help='change downsampling from random to gridsampling.')
 
     opt = parser.parse_args()
 

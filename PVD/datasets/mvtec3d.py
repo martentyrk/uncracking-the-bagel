@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 from utils.mvtec3d_util import *
 from torch.utils.data import DataLoader
 import numpy as np
-
+import open3d as o3d
 #DATASETS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../datasets', 'mvtec3d'))
 
 
@@ -43,10 +43,11 @@ class MVTec3D(Dataset):
              transforms.Normalize(mean=self.IMAGENET_MEAN, std=self.IMAGENET_STD)])
 
 class MVTec3DTrain(MVTec3D):
-    def __init__(self, datasets_path, class_name, npoints=None, normalize=True):
+    def __init__(self, datasets_path, class_name, npoints=None, normalize=False, grid_downsample=False):
         super().__init__(split="train", datasets_path=datasets_path, class_name=class_name, npoints=npoints)
         self.img_paths, self.labels = self.load_dataset()  # self.labels => good : 0, anomaly : 1
         self.normalize = normalize
+        self.grid_downsample = grid_downsample
 
     def load_dataset(self):
         img_tot_paths = []
@@ -77,10 +78,17 @@ class MVTec3DTrain(MVTec3D):
         #return (img, resized_organized_pc, resized_depth_map_3channel), label
         
         if self.npoints is not None:
-            p = resized_organized_pc
-            p = p[(p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)]
-            tr_idxs = np.random.choice(p.shape[0], self.npoints)
-            resized_organized_pc = p[tr_idxs, :]
+            if self.grid_downsample:
+                p = resized_organized_pc
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(p)
+                resized_organized_pc = pcd.voxel_down_sample(voxel_size=0.02)
+                resized_organized_pc = torch.tensor(resized_organized_pc.points)
+            else:
+                p = resized_organized_pc
+                p = p[(p[:,0] != 0) & (p[:,1] != 0) & (p[:,2] != 0)]
+                tr_idxs = np.random.choice(p.shape[0], self.npoints)
+                resized_organized_pc = p[tr_idxs, :]
             
             if self.normalize:
                 means = torch.tensor(self.BAGEL_MEAN, device=resized_organized_pc.device)
@@ -96,12 +104,13 @@ class MVTec3DTrain(MVTec3D):
 
 
 class MVTec3DTest(MVTec3D):
-    def __init__(self, datasets_path, class_name, npoints=None):
+    def __init__(self, datasets_path, class_name, npoints=None, grid_downsample=False):
         super().__init__(split="test", datasets_path=datasets_path, class_name=class_name, npoints=npoints)
         self.gt_transform = transforms.Compose([
             transforms.Resize((224, 224), interpolation=Image.NEAREST),
             transforms.ToTensor()])
         self.img_paths, self.gt_paths, self.labels = self.load_dataset()  # self.labels => good : 0, anomaly : 1
+        self.grid_downsample = grid_downsample
 
     def load_dataset(self):
         img_tot_paths = []
