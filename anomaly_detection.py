@@ -35,6 +35,7 @@ import torch
 import matplotlib.pyplot as plt
 from PIL import Image
 import tifffile as tiff
+import open3d as o3d
 
 
 def chamfer_dist_per_point(gt_pc, pred_pc):
@@ -46,15 +47,14 @@ def chamfer_dist_per_point(gt_pc, pred_pc):
     :param pred_pc: predicted point cloud, array of shape (batch_size, num_points, 3) or (num_points, 3)
     :return: array of shape (batch_size, num_points, 1) or (num_points, 1)
     """
-    # TODO use chamfer_distance
-    gt_chamfer = torch.rand(*gt_pc.shape[:-1], 1)  # example
-    return gt_chamfer
-
-    # chd = ChamferDistance()
-    # chd = chamfer_3DDist()
-    a = distChamfer(gt_pc, pred_pc)
-    dist1, dist2, idx1, idx2 = chd(gt_pc, pred_pc)
-    print(dist1.shape, dist2.shape, idx1.shape, idx2.shape)
+    pcd1 = o3d.geometry.PointCloud()
+    pcd1.points = o3d.utility.Vector3dVector(gt_pc)
+    pcd2 = o3d.geometry.PointCloud()
+    pcd2.points = o3d.utility.Vector3dVector(pred_pc)
+    dists = pcd1.compute_point_cloud_distance(pcd2)
+    dists = np.asarray(dists)
+    dists = (dists - dists.min()) / (dists.max() - dists.min())
+    return dists
 
 
 def normalize_mask(mask, method="tanh", *, threshold=0.5, tanh_scale=1.0):
@@ -145,7 +145,7 @@ def apply_dummy_anomaly(pc, pixel_indices, img, target_height, target_width):
 def predicted_anomaly_mask(pixel_indices, gt_chamfer, target_height, target_width):
     mask = np.zeros((target_height, target_width))
     for xy, ch in zip(pixel_indices, gt_chamfer):
-        mask[xy[1], xy[0]] = ch.squeeze()
+        mask[xy[1], xy[0]] = ch
     return mask
 
 
@@ -158,6 +158,8 @@ if __name__ == "__main__":
     pc1 = torch.tensor(pc)
     pc2 = torch.tensor(ano_pc)
     cd = chamfer_dist_per_point(pc1, pc2)
+
+    print(cd.min(), cd.max())
 
     mask = predicted_anomaly_mask(pixel_indices, cd, target_height, target_width)
 
