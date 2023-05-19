@@ -1,7 +1,7 @@
 import torch
 from pprint import pprint
 from metrics.evaluation_metrics import jsd_between_point_cloud_sets as JSD
-# from metrics.evaluation_metrics import compute_all_metrics, EMD_CD, distChamfer
+from metrics.evaluation_metrics import compute_all_metrics #, EMD_CD, distChamfer
 from metrics.ChamferDistancePytorch.chamfer_python import distChamfer
 
 import torch.nn as nn
@@ -411,10 +411,10 @@ def get_constrain_function(ground_truth, mask, eps, num_steps=1):
 
 #############################################################################
 
-def get_dataset(dataroot, npoints, category, use_mask=False):
+def get_dataset(dataroot, npoints, category, use_mask=False, type_data=None):
     if category == 'bagel':
         tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints)
-        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints, anomaly=opt.anomaly_data, good=opt.good_data)
+        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints, type_data=type_data)
         return tr_dataset, te_dataset
     
     tr_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
@@ -441,15 +441,30 @@ def get_dataset(dataroot, npoints, category, use_mask=False):
 
 def evaluate_gen(opt, ref_pcs, logger):
     if ref_pcs is None:
-        _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, use_mask=False)
-        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
-                                                      shuffle=False, num_workers=int(opt.workers), drop_last=False)
+        # _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, use_mask=False)
+        # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
+        #                                               shuffle=False, num_workers=int(opt.workers), drop_last=False)
         ref = []
-        for data in tqdm(test_dataloader, total=len(test_dataloader), desc='Generating Samples'):
-            x = data['test_points'].to('cuda')
-            m, s = x.mean(dim=2, keepdims=True).float().to('cuda'), x.std(dim=2, keepdims=True).float().to('cuda')
+        types_of_data = ['good', 'combined', 'contamination', 'crack', 'hole']
 
-            ref.append(x * s + m)
+        for type_of_data in types_of_data:
+
+            _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, use_mask=False, type_data=type_of_data)
+            print('test_dataset: ', test_dataset)
+
+            test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
+                                                          shuffle=False, num_workers=int(opt.workers), drop_last=False)
+            print('test dataloader: ', test_dataloader)
+
+
+            for data in tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc='Generating samples'):
+                # print()
+                # print('data keys: ', data)
+                data = data[1]
+                x = data['test_points'].to('cuda')
+                m, s = x.mean(dim=2, keepdims=True).float().to('cuda'), x.std(dim=2, keepdims=True).float().to('cuda')
+
+                ref.append(x * s + m)
 
         ref_pcs = torch.cat(ref, dim=0).contiguous()
 
@@ -652,18 +667,23 @@ def main(opt):
 
         if opt.anomaly:
             print('noise steps: ', opt.time_num, opt.anomaly_time)
-            _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category)
-            print('test_dataset: ', test_dataset)
+            types_of_data = ['good', 'combined', 'contamination', 'crack', 'hole']
 
-            test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
+            for type_of_data in types_of_data:
+
+                _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, type_data=type_of_data)
+                print('test_dataset: ', test_dataset)
+
+                test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
                                                         shuffle=False, num_workers=int(opt.workers), drop_last=False)
-            print('test dataloader: ', test_dataloader)
+                print('test dataloader: ', test_dataloader)
 
-
-            Path(outf_syn).parent.mkdir(parents=True, exist_ok=True)
-            print('start')
-            for i, data in tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc='TEST THE MAIN PIPELINE DATA'):
-                x_0, x̂_0, l_dist, r_dist = main_pipeline(data, model, opt, i, outf_syn)
+                type_folder = setup_output_subdirs(outf_syn, type_of_data)
+                print('type folder: ', type_folder)
+                Path(str(type_folder)).parent.mkdir(parents=True, exist_ok=True)
+                print('start: ', type_of_data)
+                for i, data in tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc='TEST THE MAIN PIPELINE DATA'):
+                    x_0, x̂_0, l_dist, r_dist = main_pipeline(data, model, opt, i, type_folder[0])
 
 
 
@@ -678,15 +698,14 @@ def parse_args():
     # dataset loading
     parser.add_argument('--dataroot', default='ShapeNetCore.v2.PC15k/')
     parser.add_argument('--category', default='chair')
-    parser.add_argument('--anomaly_data', type=bool, default=True, help='loading anomalous images')
-    parser.add_argument('--good_data', type=bool, default=True, help='loading good images')
+    parser.add_argument('--type_data', type=str, default='good', choices=['good', 'combined', 'contamination', 'crack', 'hole'], help='to load only a subset of the data')
 
     parser.add_argument('--batch_size', type=int, default=50, help='input batch size')
     parser.add_argument('--workers', type=int, default=16, help='workers')
     parser.add_argument('--niter', type=int, default=10000, help='number of epochs to train for')
 
     parser.add_argument('--generate', default=False)
-    parser.add_argument('--anomaly', default=True)
+    parser.add_argument('--anomaly', default=False)
     parser.add_argument('--eval_gen', default=True)
 
     parser.add_argument('--nc', default=3)

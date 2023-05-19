@@ -97,72 +97,44 @@ class MVTec3DTrain(MVTec3D):
 
 
 class MVTec3DTest(MVTec3D):
-    def __init__(self, datasets_path, class_name, npoints=None, anomaly=True, good=True):
+    def __init__(self, datasets_path, class_name, npoints=None, type_data=None):
         super().__init__(split="test", datasets_path=datasets_path, class_name=class_name, npoints=npoints)
         self.gt_transform = transforms.Compose([
             transforms.Resize((224, 224), interpolation=Image.NEAREST),
             transforms.ToTensor()])
-        self.anomaly = anomaly
-        self.good = good
+        self.type_data = type_data
         self.img_paths, self.gt_paths, self.labels = self.load_dataset()  # self.labels => good : 0, anomaly : 1
 
     def load_dataset(self):
         img_tot_paths = []
         gt_tot_paths = []
         tot_labels = []
-        defect_types = os.listdir(self.img_path)
-        for defect_type in defect_types:
-            # only anomalous
-            if self.anomaly == True and self.good == False:
-                print('loading only anomalous images')
-                if defect_type != 'good':
-                    rgb_paths = glob.glob(os.path.join(self.img_path, defect_type, 'rgb') + "/*.png")
-                    tiff_paths = glob.glob(os.path.join(self.img_path, defect_type, 'xyz') + "/*.tiff")
-                    gt_paths = glob.glob(os.path.join(self.img_path, defect_type, 'gt') + "/*.png")
-                    rgb_paths.sort()
-                    tiff_paths.sort()
-                    gt_paths.sort()
-                    sample_paths = list(zip(rgb_paths, tiff_paths))
-                    img_tot_paths.extend(sample_paths)
-                    gt_tot_paths.extend(gt_paths)
-                    tot_labels.extend([1] * len(sample_paths))
-
-            # only good
-            if self.anomaly == False and self.good == True:
-                print('loading only good images')
-                if defect_type == 'good':
-                    rgb_paths = glob.glob(os.path.join(self.img_path, defect_type, 'rgb') + "/*.png")
-                    tiff_paths = glob.glob(os.path.join(self.img_path, defect_type, 'xyz') + "/*.tiff")
-                    rgb_paths.sort()
-                    tiff_paths.sort()
-                    sample_paths = list(zip(rgb_paths, tiff_paths))
-                    img_tot_paths.extend(sample_paths)
-                    gt_tot_paths.extend([0] * len(sample_paths))
-                    tot_labels.extend([0] * len(sample_paths))
-
-            # both anomalous and good
-            if self.anomaly == True and self.good == True:
-                print('loading both good and anomalous images')
-                if defect_type == 'good':
-                    rgb_paths = glob.glob(os.path.join(self.img_path, defect_type, 'rgb') + "/*.png")
-                    tiff_paths = glob.glob(os.path.join(self.img_path, defect_type, 'xyz') + "/*.tiff")
-                    rgb_paths.sort()
-                    tiff_paths.sort()
-                    sample_paths = list(zip(rgb_paths, tiff_paths))
-                    img_tot_paths.extend(sample_paths)
-                    gt_tot_paths.extend([0] * len(sample_paths))
-                    tot_labels.extend([0] * len(sample_paths))
-                else:
-                    rgb_paths = glob.glob(os.path.join(self.img_path, defect_type, 'rgb') + "/*.png")
-                    tiff_paths = glob.glob(os.path.join(self.img_path, defect_type, 'xyz') + "/*.tiff")
-                    gt_paths = glob.glob(os.path.join(self.img_path, defect_type, 'gt') + "/*.png")
-                    rgb_paths.sort()
-                    tiff_paths.sort()
-                    gt_paths.sort()
-                    sample_paths = list(zip(rgb_paths, tiff_paths))
-                    img_tot_paths.extend(sample_paths)
-                    gt_tot_paths.extend(gt_paths)
-                    tot_labels.extend([1] * len(sample_paths))
+        # defect_types = os.listdir(self.img_path)
+        # for defect_type in defect_types:
+        if (self.type_data == 'combined') or (self.type_data == 'contamination') or (self.type_data == 'crack') or (self.type_data == 'hole'):
+            print('loading images: ', self.type_data)
+            rgb_paths = glob.glob(os.path.join(self.img_path, self.type_data, 'rgb') + "/*.png")
+            tiff_paths = glob.glob(os.path.join(self.img_path, self.type_data, 'xyz') + "/*.tiff")
+            gt_paths = glob.glob(os.path.join(self.img_path, self.type_data, 'gt') + "/*.png")
+            rgb_paths.sort()
+            tiff_paths.sort()
+            gt_paths.sort()
+            sample_paths = list(zip(rgb_paths, tiff_paths))
+            img_tot_paths.extend(sample_paths)
+            gt_tot_paths.extend(gt_paths)
+            tot_labels.extend([1] * len(sample_paths)) # different label
+        elif self.type_data == 'good':
+            print('loading images: ', self.type_data)
+            rgb_paths = glob.glob(os.path.join(self.img_path, self.type_data, 'rgb') + "/*.png")
+            tiff_paths = glob.glob(os.path.join(self.img_path, self.type_data, 'xyz') + "/*.tiff")
+            rgb_paths.sort()
+            tiff_paths.sort()
+            sample_paths = list(zip(rgb_paths, tiff_paths))
+            img_tot_paths.extend(sample_paths)
+            gt_tot_paths.extend([0] * len(sample_paths))
+            tot_labels.extend([0] * len(sample_paths)) # different label
+        else:
+            raise Exception('Incorrect category data')
 
         assert len(img_tot_paths) == len(gt_tot_paths), "Something wrong with test and ground truth pair!"
         return img_tot_paths, gt_tot_paths, tot_labels
