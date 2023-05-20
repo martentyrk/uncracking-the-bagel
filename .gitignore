@@ -5,6 +5,7 @@ __pycache__/
 .vscode
 datasets/
 runs/
+wandb/
 PVD/runs/
 # C extensions
 *.so
