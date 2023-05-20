@@ -136,3 +136,5 @@ dmypy.json
 .idea/
 
 Diffusion-SDF/data_processing/acronym/
+data/
+test.ipynb
