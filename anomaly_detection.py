@@ -1,51 +1,24 @@
-"""
-src:
-    https://github.com/otaheri/chamfer_distance  # TODO install
-    https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md
-    https://pytorch.org/get-started/locally/
-
-setup:
-    conda create -n chamfer python=3.8
-    conda activate chamfer
-
-    # install pytorch3d
-    pip install torch==1.10.0
-    pip install pytorch==1.10.0
-
-    sudo apt install g++
-    sudo apt install build-essential
-    sudo apt-get install manpages-dev
-
-    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-    conda install -c pytorch3d pytorch3d
-
-    # install chamfer_distance
-    pip install git+'https://github.com/otaheri/chamfer_distance'
-
-    #https://github.com/facebookresearch/maskrcnn-benchmark/issues/891
-    pip install torch==2.0.0+cu118 torchvision==0.7.0+cu118 -f https://download.pytorch.org/whl/torch_stable.html
-    pip install -U torch torchvision --no-cache-dir
-"""
 import numpy as np
-
-# from chamfer_distance import ChamferDistance
-# from PVD.metrics.ChamferDistancePytorch.chamfer3D.dist_chamfer_3D import chamfer_3DDist
-from PVD.metrics.ChamferDistancePytorch.chamfer_python import distChamfer
 import torch
 import matplotlib.pyplot as plt
 from PIL import Image
 import tifffile as tiff
 import open3d as o3d
+from pathlib import Path
+import os
+import argparse
+
+import sys
+sys.path.append("./3D-ADS")
+from utils.au_pro_util import calculate_au_pro
 
 
-def chamfer_dist_per_point(gt_pc, pred_pc):
+def min_dist_per_point(gt_pc, pred_pc):
     """
-    Compute the chamfer distance between two point clouds, per point.
-    Should allow batch dimension.  # TODO allow batch dimension
-
-    :param gt_pc: ground truth point cloud, array of shape (batch_size, num_points, 3) or (num_points, 3)
-    :param pred_pc: predicted point cloud, array of shape (batch_size, num_points, 3) or (num_points, 3)
-    :return: array of shape (batch_size, num_points, 1) or (num_points, 1)
+    Compute the closest distance between two point clouds, per point.
+    :param gt_pc: ground truth point cloud, array of shape (num_points, 3)
+    :param pred_pc: predicted point cloud, array of shape (num_points, 3)
+    :return: array of shape (num_points, 1)
     """
     pcd1 = o3d.geometry.PointCloud()
     pcd1.points = o3d.utility.Vector3dVector(gt_pc)
@@ -53,7 +26,6 @@ def chamfer_dist_per_point(gt_pc, pred_pc):
     pcd2.points = o3d.utility.Vector3dVector(pred_pc)
     dists = pcd1.compute_point_cloud_distance(pcd2)
     dists = np.asarray(dists)
-    dists = (dists - dists.min()) / (dists.max() - dists.min())
     return dists
 
 
@@ -144,26 +116,14 @@ def apply_dummy_anomaly(pc, pixel_indices, img, target_height, target_width):
         img[xy[1], xy[0]] = (255,0,0)
     return pc, gt_mask, img
 
-
-def predicted_anomaly_mask(pixel_indices, gt_chamfer, target_height, target_width):
-    mask = np.zeros((target_height, target_width))
-    for xy, ch in zip(pixel_indices, gt_chamfer):
-        mask[xy[1], xy[0]] = ch
-    return mask
-
-
-if __name__ == "__main__":
-    target_height, target_width = 224, 224
-    img = np.array(Image.open("data/example/000.png").resize((target_height, target_width)))
-    pc, pixel_indices = get_pc("data/example/000.tiff", target_height, target_width)
+def plot_dummy_example(rgb_path, tiff_path, target_height=224, target_width=224):
+    img = np.array(Image.open(rgb_path).resize((target_height, target_width)))
+    pc, pixel_indices = get_pc(tiff_path, target_height, target_width)
     ano_pc, gt_mask, img = apply_dummy_anomaly(pc, pixel_indices, img, target_height, target_width)
-
     pc1 = torch.tensor(pc)
     pc2 = torch.tensor(ano_pc)
-    cd = chamfer_dist_per_point(pc1, pc2)
-
+    cd = min_dist_per_point(pc1, pc2)
     mask = predicted_anomaly_mask(pixel_indices, cd, target_height, target_width)
-
     f, axes = plt.subplots(1, 4, figsize=(20, 5))
     axes[0].scatter(ano_pc[:, 0], -ano_pc[:, 1], s=0.1, c=ano_pc[:, 2])
     axes[1].imshow(img)
@@ -178,3 +138,60 @@ if __name__ == "__main__":
     axes[3].axis("off")
     plt.tight_layout()
     plt.show()
+
+
+def predicted_anomaly_mask(pixel_indices, gt_chamfer, target_height, target_width):
+    mask = np.zeros((target_height, target_width))
+    for xy, ch in zip(pixel_indices, gt_chamfer):
+        mask[xy[1], xy[0]] = ch
+    return mask
+
+def compute_pred_masks(test_folder, preds_folder, save_folder):
+    paths = Path(test_folder).rglob('*.tiff')
+    print(f"Found {len(list(paths))} tiff files in {test_folder}")
+    for tiff_filename in Path(test_folder).rglob('*.tiff'):
+        num = Path(tiff_filename).stem
+        gt_filename = str(tiff_filename).replace('.tiff', '.png').replace('xyz', 'gt')
+        ano_filename = str(tiff_filename).replace(test_folder, preds_folder).replace('.tiff', '.pth')
+        ano_filename = ano_filename.replace('xyz/', '').replace(num, f'i_{num}_x_hat_0')
+        save_filename = str(gt_filename).replace(test_folder, save_folder).replace('.png', '.npy').replace('gt', 'pred')
+        if not os.path.exists(save_filename):
+            gt_mask = np.array(Image.open(gt_filename))
+            target_height, target_width = gt_mask.shape[:2]
+            pc, pixel_indices = get_pc(tiff_filename, target_height, target_width)
+            ano_pc = torch.load(ano_filename).permute(2,1,0).squeeze().cpu().numpy()
+            cd = min_dist_per_point(pc, ano_pc)
+            mask = predicted_anomaly_mask(pixel_indices, cd, target_height, target_width)
+            os.makedirs(os.path.dirname(save_filename), exist_ok=True)
+            np.save(save_filename, mask)
+
+def compute_au_pro(gt_folder, pred_folder, anomaly_type=None):
+    if anomaly_type is not None:
+        gt_folder = os.path.join(gt_folder, anomaly_type)
+        pred_folder = os.path.join(pred_folder, anomaly_type)
+    gts = []
+    predictions = []
+    for filename in Path(gt_folder).rglob('*.png'):
+        filename = str(filename)
+        if 'gt' in filename:
+            img = np.array(Image.open(filename))
+            img[img > 0] = 1
+            gts.append(img)
+            pred_filename = filename.replace(gt_folder, pred_folder).replace('gt', 'pred').replace('png', 'npy')
+            pred = np.load(pred_filename)
+            # TO-DO: normalize or threshold pred
+            predictions.append(pred)
+    au_pro, pro_curve = calculate_au_pro(gts, predictions, integration_limit=0.3, num_thresholds=100)
+    return au_pro, pro_curve
+
+if __name__ == "__main__":
+    #argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--test_folder', type=str, help='Folder containing ground truths.')
+    parser.add_argument('--preds_folder', type=str, help='Folder containing reconstructed point clouds.')
+    parser.add_argument('--save_folder', type=str, help='Folder to save predicted masks.')
+    parser.add_argument('--anomaly_type', type=str, default=None, help='Anomaly type')
+    args = parser.parse_args()
+    compute_pred_masks(args.test_folder, args.preds_folder, args.save_folder)
+    au_pro, _ = compute_au_pro(args.test_folder, args.save_folder, args.anomaly_type)
+    print(f"Area under precision-recall curve: {au_pro}")
