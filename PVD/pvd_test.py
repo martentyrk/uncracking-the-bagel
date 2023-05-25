@@ -663,10 +663,12 @@ def main(opt):
             evaluate_gen(opt, ref, logger)
             
             ## Calculate au_pro
-            compute_pred_masks(opt.test_folder, type_folder, type_folder)
-            au_pro, _ = compute_au_pro(opt.test_folder, type_folder, opt.type_data)
-            with open(os.path.join(output_dir, 'au_pro_%s.json' % (opt.type_data)), "w") as write_file:
-                json.dump({opt.type_data: au_pro}, write_file)
+            for type_of_data in types_of_data:
+                type_folder = setup_output_subdirs(outf_syn, type_of_data)
+                compute_pred_masks(opt.test_folder, type_folder, type_folder)
+                au_pro, _ = compute_au_pro(opt.test_folder, type_folder)
+                with open(os.path.join(output_dir, 'au_pro_%s.json' % (type_of_data)), "w") as write_file:
+                    json.dump({type_of_data: au_pro}, write_file)
 
 
 def parse_args():
