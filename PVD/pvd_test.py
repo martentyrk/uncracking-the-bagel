@@ -675,6 +675,7 @@ def main(opt):
                 au_pro, pro_curve = compute_au_pro(opt.test_folder, type_folder)
                 
                 fpr, pro = pro_curve
+                plt.figure()
                 plt.plot(fpr, pro)
                 plt.ylabel('False positive rate')
                 plt.xlabel('PRO value')
