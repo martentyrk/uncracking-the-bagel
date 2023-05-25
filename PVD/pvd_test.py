@@ -1,7 +1,7 @@
 import torch
 from pprint import pprint
-from metrics.evaluation_metrics import jsd_between_point_cloud_sets as JSD
-from metrics.evaluation_metrics import compute_all_metrics #, EMD_CD, distChamfer
+# from metrics.evaluation_metrics import jsd_between_point_cloud_sets as JSD
+# from metrics.evaluation_metrics import compute_all_metrics #, EMD_CD, distChamfer
 from metrics.ChamferDistancePytorch.chamfer_python import distChamfer
 
 import torch.nn as nn
@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 from datasets.shapenet_data_pc import ShapeNet15kPointClouds
 from datasets.mvtec3d import MVTec3DTrain, MVTec3DTest
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from anomaly_detection import compute_au_pro, compute_pred_masks
 
 
@@ -418,50 +419,50 @@ def get_dataset(dataroot, npoints, type_data=None):
     return tr_dataset, te_dataset
 
 
-def evaluate_gen(opt, ref_pcs, logger):
-    if ref_pcs is None:
-        ref = []
-        types_of_data = ['good', 'combined', 'contamination', 'crack', 'hole']
+# def evaluate_gen(opt, ref_pcs, logger):
+#     if ref_pcs is None:
+#         ref = []
+#         types_of_data = ['good', 'combined', 'contamination', 'crack', 'hole']
 
-        for type_of_data in types_of_data:
+#         for type_of_data in types_of_data:
 
-            _, test_dataset = get_dataset(opt.dataroot, opt.npoints, type_data=type_of_data)
-            print('test_dataset: ', test_dataset)
+#             _, test_dataset = get_dataset(opt.dataroot, opt.npoints, type_data=type_of_data)
+#             print('test_dataset: ', test_dataset)
 
-            test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
-                                                          shuffle=False, num_workers=int(opt.workers), drop_last=False)
-            print('test dataloader: ', test_dataloader)
+#             test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
+#                                                           shuffle=False, num_workers=int(opt.workers), drop_last=False)
+#             print('test dataloader: ', test_dataloader)
 
 
-            for data in tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc='Generating samples'):
-                # print()
-                # print('data keys: ', data)
-                data = data[1]
-                x = data['test_points'].to('cuda')
-                m, s = x.mean(dim=2, keepdims=True).float().to('cuda'), x.std(dim=2, keepdims=True).float().to('cuda')
+#             for data in tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc='Generating samples'):
+#                 # print()
+#                 # print('data keys: ', data)
+#                 data = data[1]
+#                 x = data['test_points'].to('cuda')
+#                 m, s = x.mean(dim=2, keepdims=True).float().to('cuda'), x.std(dim=2, keepdims=True).float().to('cuda')
 
-                ref.append(x * s + m)
+#                 ref.append(x * s + m)
 
-        ref_pcs = torch.cat(ref, dim=0).contiguous()
+#         ref_pcs = torch.cat(ref, dim=0).contiguous()
 
-    logger.info("Loading sample path: %s"
-                % (opt.eval_path))
-    sample_pcs = torch.load(opt.eval_path).contiguous()
+#     logger.info("Loading sample path: %s"
+#                 % (opt.eval_path))
+#     sample_pcs = torch.load(opt.eval_path).contiguous()
 
-    logger.info("Generation sample size:%s reference size: %s"
-                % (sample_pcs.size(), ref_pcs.size()))
+#     logger.info("Generation sample size:%s reference size: %s"
+#                 % (sample_pcs.size(), ref_pcs.size()))
 
-    # Compute metrics
-    results = compute_all_metrics(sample_pcs, ref_pcs, opt.batch_size)
-    results = {k: (v.cpu().detach().item()
-                   if not isinstance(v, float) else v) for k, v in results.items()}
+#     # Compute metrics
+#     results = compute_all_metrics(sample_pcs, ref_pcs, opt.batch_size)
+#     results = {k: (v.cpu().detach().item()
+#                    if not isinstance(v, float) else v) for k, v in results.items()}
 
-    pprint(results)
-    logger.info(results)
+#     pprint(results)
+#     logger.info(results)
 
-    jsd = JSD(sample_pcs.numpy(), ref_pcs.numpy())
-    pprint('JSD: {}'.format(jsd))
-    logger.info('JSD: {}'.format(jsd))
+#     jsd = JSD(sample_pcs.numpy(), ref_pcs.numpy())
+#     pprint('JSD: {}'.format(jsd))
+#     logger.info('JSD: {}'.format(jsd))
 
 
 def generate(model, opt, outf_syn):
@@ -639,7 +640,10 @@ def main(opt):
         if opt.anomaly:
             print('noise steps: ', opt.time_num, opt.anomaly_time)
             types_of_data = ['good', 'combined', 'contamination', 'crack', 'hole']
-
+            
+            if opt.type_data:
+                types_of_data = [opt.type_data]
+                  
             for type_of_data in types_of_data:
 
                 _, test_dataset = get_dataset(opt.dataroot, opt.npoints, type_data=type_of_data)
@@ -660,13 +664,14 @@ def main(opt):
 
         if opt.eval_gen:
             # Evaluate generation
-            evaluate_gen(opt, ref, logger)
+            # evaluate_gen(opt, ref, logger)
             
             ## Calculate au_pro
             for type_of_data in types_of_data:
                 type_folder = setup_output_subdirs(outf_syn, type_of_data)
-                compute_pred_masks(opt.test_folder, type_folder, type_folder)
-                au_pro, _ = compute_au_pro(opt.test_folder, type_folder)
+                Path(str(type_folder)).parent.mkdir(parents=True, exist_ok=True)
+                compute_pred_masks(opt.test_folder, type_folder[0], type_folder[0])
+                au_pro, _ = compute_au_pro(opt.test_folder, type_folder[0])
                 with open(os.path.join(output_dir, 'au_pro_%s.json' % (type_of_data)), "w") as write_file:
                     json.dump({type_of_data: au_pro}, write_file)
 
@@ -685,7 +690,10 @@ def parse_args():
     parser.add_argument('--generate', default=False)
     parser.add_argument('--anomaly', action='store_true')
     parser.add_argument('--eval_gen', action='store_true', help='When you pass this down, we will run evaluation on the outputs')
-
+    parser.add_argument('--embed_dim', type=int, default=64)
+    parser.add_argument('--attention', default=True)
+    parser.add_argument('--dropout', default=0.1)
+    
     parser.add_argument('--nc', default=3)
     parser.add_argument('--npoints', default=10000)
     '''model'''

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_titanrtx_shared_course
+#SBATCH --gres=gpu:1
+#SBATCH --job-name=pvd_test
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=3
+#SBATCH --time=00:15:00
+#SBATCH --mem=32000M
+#SBATCH --output=slurm_output_%A.out
+
+module purge
+source activate pvd4
+
+# Run your code
+python -u PVD/pvd_test.py --dataroot /home/lcur0949/PVD/data --batch_size 1 --model /home/lcur0949/Computer-vision-2-project/PVD/output/train_generation/2023-05-22-15-45-05/epoch_2499.pth --workers 0 --anomaly --eval_gen --test_folder /home/lcur0949/PVD/data/bagel/test/combined --type_data combined

@@ -10,8 +10,7 @@ import argparse
 
 import sys
 sys.path.append("./3D-ADS")
-from utils.au_pro_util import calculate_au_pro
-
+from PVD.utils.au_pro_util import calculate_au_pro
 
 def min_dist_per_point(gt_pc, pred_pc):
     """
