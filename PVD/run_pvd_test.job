@@ -13,4 +13,4 @@ module purge
 source activate pvd4
 
 # Run your code
-python -u pvd_test.py --dataroot /home/lcur0949/PVD/data --batch_size 1 --model /home/lcur0949/Computer-vision-2-project/PVD/output/train_generation/2023-05-22-15-45-05/epoch_2499.pth --category bagel --workers 0 --anomaly
+python -u pvd_test.py --dataroot /data --batch_size 1 --model path_to_model --category bagel --workers 0 --anomaly
