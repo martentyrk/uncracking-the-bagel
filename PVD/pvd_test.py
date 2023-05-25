@@ -7,7 +7,7 @@ from metrics.ChamferDistancePytorch.chamfer_python import distChamfer
 import torch.nn as nn
 import torch.utils.data
 import open3d as o3d
-
+import json
 import argparse
 from torch.distributions import Normal
 
@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 from datasets.shapenet_data_pc import ShapeNet15kPointClouds
 from datasets.mvtec3d import MVTec3DTrain, MVTec3DTest
+from anomaly_detection import compute_au_pro, compute_pred_masks
 
 
 
@@ -411,45 +412,20 @@ def get_constrain_function(ground_truth, mask, eps, num_steps=1):
 
 #############################################################################
 
-def get_dataset(dataroot, npoints, category, use_mask=False, type_data=None):
-    if category == 'bagel':
-        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints)
-        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints, type_data=type_data)
-        return tr_dataset, te_dataset
-    
-    tr_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
-                                        categories=[category], split='train',
-                                        tr_sample_size=npoints,
-                                        te_sample_size=npoints,
-                                        scale=1.,
-                                        normalize_per_shape=False,
-                                        normalize_std_per_axis=False,
-                                        random_subsample=True, use_mask=use_mask)
-    te_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
-                                        categories=[category], split='val',
-                                        tr_sample_size=npoints,
-                                        te_sample_size=npoints,
-                                        scale=1.,
-                                        normalize_per_shape=False,
-                                        normalize_std_per_axis=False,
-                                        all_points_mean=tr_dataset.all_points_mean,
-                                        all_points_std=tr_dataset.all_points_std,
-                                        use_mask=use_mask
-                                        )
+def get_dataset(dataroot, npoints, type_data=None):
+    tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints)
+    te_dataset = MVTec3DTest(dataroot, 'bagel', npoints, type_data=type_data)
     return tr_dataset, te_dataset
 
 
 def evaluate_gen(opt, ref_pcs, logger):
     if ref_pcs is None:
-        # _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, use_mask=False)
-        # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
-        #                                               shuffle=False, num_workers=int(opt.workers), drop_last=False)
         ref = []
         types_of_data = ['good', 'combined', 'contamination', 'crack', 'hole']
 
         for type_of_data in types_of_data:
 
-            _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, use_mask=False, type_data=type_of_data)
+            _, test_dataset = get_dataset(opt.dataroot, opt.npoints, type_data=type_of_data)
             print('test_dataset: ', test_dataset)
 
             test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
@@ -490,7 +466,7 @@ def evaluate_gen(opt, ref_pcs, logger):
 
 def generate(model, opt, outf_syn):
     print('RUNNING GENERATE')
-    _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category)
+    _, test_dataset = get_dataset(opt.dataroot, opt.npoints)
 
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
                                                   shuffle=False, num_workers=int(opt.workers), drop_last=False)
@@ -581,10 +557,10 @@ def main_pipeline(anomolous_data, model, opt, i, outf_syn):
     visualize_pointcloud_batch('%s/i_%03d_x_t.png' % (outf_syn, i), x_t.transpose(1,2), None, None, None)
 
     # Denoise the noisy point-clouds for opt.anomaly_time steps using reverse diffusion
-    x̂_0 = model.gen_samples_anomaly(x_t, 'cuda', max_timestep=opt.time_num)
+    x_hat_0 = model.gen_samples_anomaly(x_t, 'cuda', max_timestep=opt.time_num)
 
     x_0 = x_0.contiguous()
-    x̂_0 = x̂_0.contiguous()
+    x_hat_0 = x_hat_0.contiguous()
 
     # Normalize the x_0 and x̂_0
     # x_0 = x_0 * s + m
@@ -596,22 +572,22 @@ def main_pipeline(anomolous_data, model, opt, i, outf_syn):
     o3d.io.write_point_cloud('%s/i_%03d_x_0.ply' % (outf_syn, i),pcd)
 
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(x̂_0[0].T.detach().cpu().numpy())
+    pcd.points = o3d.utility.Vector3dVector(x_hat_0[0].T.detach().cpu().numpy())
     o3d.io.write_point_cloud('%s/i_%03d_x_hat_0.ply' % (outf_syn, i), pcd)
 
+    if opt.visualize:
+        visualize_pointcloud_batch('%s/i_%03d_x_0.png' % (outf_syn, i), x_0.transpose(1,2), None, None, None)
+        visualize_pointcloud_batch('%s/i_%03d_x_hat_0.png' % (outf_syn, i), x_hat_0.transpose(1,2), None, None, None)
 
-    visualize_pointcloud_batch('%s/i_%03d_x_0.png' % (outf_syn, i), x_0.transpose(1,2), None, None, None)
-    visualize_pointcloud_batch('%s/i_%03d_x_hat_0.png' % (outf_syn, i), x̂_0.transpose(1,2), None, None, None)
-
-    visualize_pointcloud_samples_3d('%s/i_%03d_x_0.pth' % (outf_syn, i), x_0.transpose(1,2))
-    visualize_pointcloud_samples_3d('%s/i_%03d_x_hat_0.pth' % (outf_syn, i), x̂_0.transpose(1,2))
+        visualize_pointcloud_samples_3d('%s/i_%03d_x_0.pth' % (outf_syn, i), x_0.transpose(1,2))
+        visualize_pointcloud_samples_3d('%s/i_%03d_x_hat_0.pth' % (outf_syn, i), x_hat_0.transpose(1,2))
 
     # Save the anomaly score (Metrics - Chamfer Distance)
 
     # Chamfer Distance
     # dist_A_to_B => distance from x_0 to x̂_0
     # dist_B_to_A => distance from x̂_0 to x_0
-    closest_point_to_b, closest_point_to_a, idx_b, idx_a = distChamfer(x_0, x̂_0)
+    closest_point_to_b, closest_point_to_a, idx_b, idx_a = distChamfer(x_0, x_hat_0)
 
     # print('printing Chamfer...')
     # print('closest point of b from points to a: ', closest_point_to_b)
@@ -619,15 +595,10 @@ def main_pipeline(anomolous_data, model, opt, i, outf_syn):
     # print('idx of closest point on b of points from a: ', idx_b)
     # print('idx of closest point on a of points from b: ', idx_a)
 
-    return x_0, x̂_0, closest_point_to_b, closest_point_to_a
+    return x_0, x_hat_0, closest_point_to_b, closest_point_to_a
 
 
 def main(opt):
-    if opt.category == 'airplane':
-        opt.beta_start = 1e-5
-        opt.beta_end = 0.008
-        opt.schedule_type = 'warm0.1'
-
     exp_id = os.path.splitext(os.path.basename(__file__))[0]
     dir_id = os.path.dirname(__file__)
     output_dir = get_output_dir(dir_id, exp_id)
@@ -671,9 +642,9 @@ def main(opt):
 
             for type_of_data in types_of_data:
 
-                _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, type_data=type_of_data)
+                _, test_dataset = get_dataset(opt.dataroot, opt.npoints, type_data=type_of_data)
                 print('test_dataset: ', test_dataset)
-
+                
                 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
                                                         shuffle=False, num_workers=int(opt.workers), drop_last=False)
                 print('test dataloader: ', test_dataloader)
@@ -690,6 +661,12 @@ def main(opt):
         if opt.eval_gen:
             # Evaluate generation
             evaluate_gen(opt, ref, logger)
+            
+            ## Calculate au_pro
+            compute_pred_masks(opt.test_folder, type_folder, type_folder)
+            au_pro, _ = compute_au_pro(opt.test_folder, type_folder, opt.type_data)
+            with open(os.path.join(output_dir, 'au_pro_%s.json' % (opt.type_data)), "w") as write_file:
+                json.dump({opt.type_data: au_pro}, write_file)
 
 
 def parse_args():
@@ -697,7 +674,6 @@ def parse_args():
 
     # dataset loading
     parser.add_argument('--dataroot', default='ShapeNetCore.v2.PC15k/')
-    parser.add_argument('--category', default='chair')
     parser.add_argument('--type_data', type=str, default='good', choices=['good', 'combined', 'contamination', 'crack', 'hole'], help='to load only a subset of the data')
 
     parser.add_argument('--batch_size', type=int, default=50, help='input batch size')
@@ -705,8 +681,8 @@ def parse_args():
     parser.add_argument('--niter', type=int, default=10000, help='number of epochs to train for')
 
     parser.add_argument('--generate', default=False)
-    parser.add_argument('--anomaly', default=False)
-    parser.add_argument('--eval_gen', default=True)
+    parser.add_argument('--anomaly', action='store_true')
+    parser.add_argument('--eval_gen', action='store_true', help='When you pass this down, we will run evaluation on the outputs')
 
     parser.add_argument('--nc', default=3)
     parser.add_argument('--npoints', default=10000)
@@ -717,9 +693,6 @@ def parse_args():
     parser.add_argument('--time_num', default=50)
 
     # params
-    parser.add_argument('--attention', default=True)
-    parser.add_argument('--dropout', default=0.1)
-    parser.add_argument('--embed_dim', type=int, default=64)
     parser.add_argument('--loss_type', default='mse')
     parser.add_argument('--model_mean_type', default='eps')
     parser.add_argument('--model_var_type', default='fixedsmall')
@@ -727,15 +700,12 @@ def parse_args():
     parser.add_argument('--model', default='', required=True, help="path to model (to continue training)")
 
     '''eval'''
-
-    parser.add_argument('--eval_path',
-                        default='')
-
+    parser.add_argument('--eval_path', default='')
     parser.add_argument('--manualSeed', default=42, type=int, help='random seed')
-
-    parser.add_argument('--gpu', type=int, default=0, metavar='S', help='gpu id (default: 0)')
-    
+    parser.add_argument('--gpu', type=int, default=0, metavar='S', help='gpu id (default: 0)')    
     parser.add_argument('--anomaly_time', type=int, default=50, metavar='S', help='anomaly time step (default: 250)')
+    parser.add_argument('--visualize',  action='store_true', help='When you pass this down, we will visualize output and input')
+    parser.add_argument('--test_folder', type=str, help='Folder containing ground truths.')
 
     opt = parser.parse_args()
 
