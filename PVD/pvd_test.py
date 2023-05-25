@@ -580,8 +580,8 @@ def main_pipeline(anomolous_data, model, opt, i, outf_syn):
         visualize_pointcloud_batch('%s/i_%03d_x_0.png' % (outf_syn, i), x_0.transpose(1,2), None, None, None)
         visualize_pointcloud_batch('%s/i_%03d_x_hat_0.png' % (outf_syn, i), x_hat_0.transpose(1,2), None, None, None)
 
-        visualize_pointcloud_samples_3d('%s/i_%03d_x_0.pth' % (outf_syn, i), x_0.transpose(1,2))
-        visualize_pointcloud_samples_3d('%s/i_%03d_x_hat_0.pth' % (outf_syn, i), x_hat_0.transpose(1,2))
+    visualize_pointcloud_samples_3d('%s/i_%03d_x_0.pth' % (outf_syn, i), x_0.transpose(1,2))
+    visualize_pointcloud_samples_3d('%s/i_%03d_x_hat_0.pth' % (outf_syn, i), x_hat_0.transpose(1,2))
 
     # Save the anomaly score (Metrics - Chamfer Distance)
 
@@ -670,18 +670,31 @@ def main(opt):
             for type_of_data in types_of_data:
                 type_folder = setup_output_subdirs(outf_syn, type_of_data)
                 Path(str(type_folder)).parent.mkdir(parents=True, exist_ok=True)
-                compute_pred_masks(opt.test_folder, type_folder[0], type_folder[0])
-                au_pro, _ = compute_au_pro(opt.test_folder, type_folder[0])
+                type_folder = type_folder[0]
+                compute_pred_masks(opt.test_folder, type_folder, type_folder)
+                au_pro, pro_curve = compute_au_pro(opt.test_folder, type_folder)
+                
+                fpr, pro = pro_curve
+                plt.plot(fpr, pro)
+                plt.ylabel('False positive rate')
+                plt.xlabel('PRO value')
+                plt.savefig(os.path.join(output_dir,'pro_curve_%s.png' % (type_of_data)))
+                
+                #The PRO [4] metric, defined as the average relative
+                # overlap of the binary prediction P with each ground truth connected component Ck where K denotes the number of
+                # ground truth components. The final metric is computed by
+                # integrating this curve up to some false positive rate and normalizing
+                
                 with open(os.path.join(output_dir, 'au_pro_%s.json' % (type_of_data)), "w") as write_file:
-                    json.dump({type_of_data: au_pro}, write_file)
+                    json.dump({type_of_data: [au_pro, pro_curve]}, write_file)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
     # dataset loading
-    parser.add_argument('--dataroot', default='ShapeNetCore.v2.PC15k/')
-    parser.add_argument('--type_data', type=str, default='good', choices=['good', 'combined', 'contamination', 'crack', 'hole'], help='to load only a subset of the data')
+    parser.add_argument('--dataroot', default='data/')
+    parser.add_argument('--type_data', type=str, default='combined', choices=['good', 'combined', 'contamination', 'crack', 'hole'], help='to load only a subset of the data')
 
     parser.add_argument('--batch_size', type=int, default=50, help='input batch size')
     parser.add_argument('--workers', type=int, default=16, help='workers')
