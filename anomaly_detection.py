@@ -178,18 +178,26 @@ def compute_au_pro(gt_folder, pred_folder, anomaly_type=None):
             gts.append(img)
             pred_filename = filename.replace(gt_folder, pred_folder).replace('gt', 'pred').replace('png', 'npy')
             pred = np.load(pred_filename)
-
-            # TO-DO: normalize or threshold pred
-            # pred = torch.Tensor(pred)
-            # pred = normalize_mask(pred, 'threshold', threshold=0.02)
-            # pred = pred.cpu().numpy()
+            
+            #Saving the mask
             plt.figure()
             plt.imshow(pred)
             img_path = str(pred_filename).replace('.npy', '.png')
             plt.savefig(img_path)
+            plt.close()
+            
             predictions.append(pred)
-    au_pro, pro_curve = calculate_au_pro(gts, predictions, integration_limit=0.3, num_thresholds=100)
-    return au_pro, pro_curve
+    integration_limits = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    au_pro_dict = {'limits': integration_limits,
+                   'au_pro': [],
+                   'pro_curve': []
+                   }
+    for limit in integration_limits:
+        au_pro, pro_curve = calculate_au_pro(gts, predictions, integration_limit=limit, num_thresholds=100)
+        au_pro_dict['au_pro'].append(au_pro)
+        au_pro_dict['pro_curve'].append(pro_curve)
+        
+    return au_pro_dict
 
 if __name__ == "__main__":
     #argparse
