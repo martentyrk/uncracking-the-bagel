@@ -7,6 +7,7 @@ import open3d as o3d
 from pathlib import Path
 import os
 import argparse
+from tqdm import tqdm
 
 import sys
 sys.path.append("./3D-ADS")
@@ -145,48 +146,119 @@ def predicted_anomaly_mask(pixel_indices, gt_chamfer, target_height, target_widt
         mask[xy[1], xy[0]] = ch
     return mask
 
-def compute_pred_masks(test_folder, preds_folder, save_folder):
-    paths = Path(test_folder).rglob('*.tiff')
-    print(f"Found {len(list(paths))} tiff files in {test_folder}")
-    for tiff_filename in Path(test_folder).rglob('*.tiff'):
-        num = Path(tiff_filename).stem
-        gt_filename = str(tiff_filename).replace('.tiff', '.png').replace('xyz', 'gt')
-        ano_filename = str(tiff_filename).replace(test_folder, preds_folder).replace('.tiff', '.pth')
-        ano_filename = ano_filename.replace('xyz/', '').replace(num, f'i_{num}_x_hat_0')
-        save_filename = str(gt_filename).replace(test_folder, save_folder).replace('.png', '.npy').replace('gt', 'pred')
-        if not os.path.exists(save_filename):
-            gt_mask = np.array(Image.open(gt_filename))
-            target_height, target_width = gt_mask.shape[:2]
-            pc, pixel_indices = get_pc(tiff_filename, target_height, target_width)
-            ano_pc = torch.load(ano_filename).permute(2,1,0).squeeze().cpu().numpy()
-            cd = min_dist_per_point(pc, ano_pc)
-            mask = predicted_anomaly_mask(pixel_indices, cd, target_height, target_width)
-            os.makedirs(os.path.dirname(save_filename), exist_ok=True)
-            np.save(save_filename, mask)
+def get_all_files(path, file_type):
+    """
+    Get all files of a certain type in a folder and its subfolders.
+    :param path: path to folder
+    :param file_type: file type (e.g. 'png', 'tiff', 'pth')
+    :return: list of file paths
+    """
+    paths = list(Path(path).rglob(f'*.{file_type}'))
+    return paths
+
+
+def path2naming(file_path):
+    """
+    Get the naming convention for the test files.
+
+    Args:
+        file_path (str): file path (e.g. .../test/crack/xyz/0000.tiff)
+
+    Returns:
+        root_path (str): root path (e.g. .../test)
+        category (str): category (crack, contamination, combined, good, hole)
+        data_type (str): data type (gt, xyz, rgb)
+        num (str): number (e.g. 0000)
+        file_type (str): file type (tiff, png, pth)
+    """
+    root_path, category, data_type, filename = str(file_path).rsplit('/', maxsplit=3)
+    num, file_type = filename.split('.')
+    return root_path, category, data_type, num, file_type
+
+
+def naming_gt(gt_path, category, num):
+    return os.path.join(gt_path, category, 'gt', f'{num}.png')
+
+def naming_ano(preds_folder, category, num):
+    return os.path.join(preds_folder, category, f'i_{num}_x_hat_0.pth')
+
+def naming_save_npy(save_folder, category, num):
+    return os.path.join(save_folder, category, 'pred', f'{num}.npy')
+
+def naming_save_png(save_folder, category, num):
+    return os.path.join(save_folder, category, 'pred', f'{num}.png')
+
+
+def compute_pred_masks(test_folder, preds_folder, save_folder, anomaly_type=None, save_png=True, overwrite=False):
+    
+    if anomaly_type is not None:
+        find_root = os.path.join(test_folder, anomaly_type)
+    else:
+        find_root = test_folder
+    paths = get_all_files(find_root, 'tiff')
+    print(f"Found {len(paths)} tiff files in {find_root}")
+
+    for tiff_filename in tqdm(paths, total=len(paths), desc='Computing predicted masks'):
+        _, category, data_type, num, file_type = path2naming(str(tiff_filename))
+        assert data_type == 'xyz'
+        assert file_type == 'tiff'
+
+        gt_filename = naming_gt(test_folder, category, num)
+        ano_filename = naming_ano(preds_folder, category, num)
+        save_filename = naming_save_npy(save_folder, category, num)
+
+        if os.path.exists(save_filename) and not overwrite:
+            # don't overwrite existing files
+            continue
+
+        # get gt mask
+        gt_mask = np.array(Image.open(gt_filename))
+        target_height, target_width = gt_mask.shape[:2]
+
+        # compute predicted mask, unnormalized
+        pc, pixel_indices = get_pc(tiff_filename, target_height, target_width)
+        ano_pc = torch.load(ano_filename).permute(2,1,0).squeeze().cpu().numpy()
+        cd = min_dist_per_point(pc, ano_pc)
+        mask = predicted_anomaly_mask(pixel_indices, cd, target_height, target_width)
+
+        # save predicted mask
+        os.makedirs(os.path.dirname(save_filename), exist_ok=True)
+        np.save(save_filename, mask)
+
+        if save_png:
+            plt.figure()
+            plt.imshow(mask)
+            plt.colorbar()
+            plt.savefig(naming_save_png(save_folder, category, num))
+            plt.close()
+
 
 def compute_au_pro(gt_folder, pred_folder, anomaly_type=None):
+
     if anomaly_type is not None:
-        gt_folder = os.path.join(gt_folder, anomaly_type)
-        pred_folder = os.path.join(pred_folder, anomaly_type)
+        find_root = os.path.join(gt_folder, anomaly_type)
+    else:
+        find_root = gt_folder
+    paths = get_all_files(find_root, 'png')
+    print(f"Found {len(paths)} tiff files in {find_root}")
+
     gts = []
     predictions = []
-    for filename in Path(gt_folder).rglob('*.png'):
-        filename = str(filename)
-        if 'gt' in filename:
+
+    for filename in tqdm(paths, total=len(paths), desc='Computing AU-PRO'):
+        _, category, data_type, num, file_type = path2naming(filename)
+
+        if data_type == 'gt' and file_type == 'png':
+
+            # get gt mask
             img = np.array(Image.open(filename))
             img[img > 0] = 1
             gts.append(img)
-            pred_filename = filename.replace(gt_folder, pred_folder).replace('gt', 'pred').replace('png', 'npy')
+
+            pred_filename = naming_save_npy(pred_folder, category, num)
             pred = np.load(pred_filename)
-            
-            #Saving the mask
-            plt.figure()
-            plt.imshow(pred)
-            img_path = str(pred_filename).replace('.npy', '.png')
-            plt.savefig(img_path)
-            plt.close()
-            
             predictions.append(pred)
+            
     integration_limits = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     au_pro_dict = {'limits': integration_limits,
                    'au_pro': [],
@@ -199,14 +271,14 @@ def compute_au_pro(gt_folder, pred_folder, anomaly_type=None):
         
     return au_pro_dict
 
+
 if __name__ == "__main__":
-    #argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_folder', type=str, help='Folder containing ground truths.')
     parser.add_argument('--preds_folder', type=str, help='Folder containing reconstructed point clouds.')
     parser.add_argument('--save_folder', type=str, help='Folder to save predicted masks.')
     parser.add_argument('--anomaly_type', type=str, default=None, help='Anomaly type')
     args = parser.parse_args()
-    compute_pred_masks(args.test_folder, args.preds_folder, args.save_folder)
-    au_pro, _ = compute_au_pro(args.test_folder, args.save_folder, args.anomaly_type)
-    print(f"Area under precision-recall curve: {au_pro}")
+    compute_pred_masks(args.test_folder, args.preds_folder, args.save_folder, args.anomaly_type, overwrite=True)
+    au_pro = compute_au_pro(args.test_folder, args.save_folder, args.anomaly_type)
+    print(f"Area Under PRO curve: {au_pro}")
