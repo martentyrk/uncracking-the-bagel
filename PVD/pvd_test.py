@@ -549,7 +549,7 @@ def main_pipeline(anomolous_data, model, opt, i, outf_syn):
 
     # Create time_step tensor
     B, D, N = x_0.shape
-    t = torch.tensor([opt.time_num-1] * B, device=x_0.device)
+    t = torch.tensor([opt.anomaly_time-1] * B, device=x_0.device)
 
     assert t.shape == torch.Size([B])
 
@@ -558,7 +558,7 @@ def main_pipeline(anomolous_data, model, opt, i, outf_syn):
     visualize_pointcloud_batch('%s/i_%03d_x_t.png' % (outf_syn, i), x_t.transpose(1,2), None, None, None)
 
     # Denoise the noisy point-clouds for opt.anomaly_time steps using reverse diffusion
-    x_hat_0 = model.gen_samples_anomaly(x_t, 'cuda', max_timestep=opt.time_num)
+    x_hat_0 = model.gen_samples_anomaly(x_t, 'cuda', max_timestep=opt.anomaly_time)
 
     x_0 = x_0.contiguous()
     x_hat_0 = x_hat_0.contiguous()
@@ -609,7 +609,7 @@ def main(opt):
 
     outf_syn, = setup_output_subdirs(output_dir, 'syn')
 
-    betas = get_betas(opt.schedule_type, opt.beta_start, opt.beta_end, opt.time_num)
+    betas = get_betas(opt.schedule_type, opt.beta_start, opt.beta_end, opt.anomaly_time)
     model = Model(opt, betas, opt.loss_type, opt.model_mean_type, opt.model_var_type)
 
     if opt.cuda:
@@ -638,12 +638,14 @@ def main(opt):
             ref = generate(model, opt, outf_syn)
 
         if opt.anomaly:
-            print('noise steps: ', opt.time_num, opt.anomaly_time)
-            types_of_data = ['good', 'combined', 'contamination', 'crack', 'hole']
+            print('noise steps: ', opt.anomaly_time)
+            types_of_data = ['combined', 'contamination', 'crack', 'hole']
             
             if opt.type_data:
                 types_of_data = [opt.type_data]
-                  
+            
+            print('Running on', types_of_data)
+            
             for type_of_data in types_of_data:
 
                 _, test_dataset = get_dataset(opt.dataroot, opt.npoints, type_data=type_of_data)
@@ -671,23 +673,13 @@ def main(opt):
                 type_folder = setup_output_subdirs(outf_syn, type_of_data)
                 Path(str(type_folder)).parent.mkdir(parents=True, exist_ok=True)
                 type_folder = type_folder[0]
-                compute_pred_masks(opt.test_folder, type_folder, type_folder)
-                au_pro, pro_curve = compute_au_pro(opt.test_folder, type_folder)
-                
-                fpr, pro = pro_curve
-                plt.figure()
-                plt.plot(fpr, pro)
-                plt.ylabel('False positive rate')
-                plt.xlabel('PRO value')
-                plt.savefig(os.path.join(output_dir,'pro_curve_%s.png' % (type_of_data)))
-                
-                #The PRO [4] metric, defined as the average relative
-                # overlap of the binary prediction P with each ground truth connected component Ck where K denotes the number of
-                # ground truth components. The final metric is computed by
-                # integrating this curve up to some false positive rate and normalizing
+                test_folder = os.path.join(opt.test_folder, type_of_data)
+                print('Test folder', test_folder)
+                compute_pred_masks(test_folder, type_folder, type_folder)
+                au_pro_dict = compute_au_pro(test_folder, type_folder)
                 
                 with open(os.path.join(output_dir, 'au_pro_%s.json' % (type_of_data)), "w") as write_file:
-                    json.dump({type_of_data: [au_pro, pro_curve]}, write_file)
+                    json.dump({type_of_data: au_pro_dict}, write_file)
 
 
 def parse_args():
@@ -695,7 +687,7 @@ def parse_args():
 
     # dataset loading
     parser.add_argument('--dataroot', default='data/')
-    parser.add_argument('--type_data', type=str, default='combined', choices=['good', 'combined', 'contamination', 'crack', 'hole'], help='to load only a subset of the data')
+    parser.add_argument('--type_data', type=str, default=None, choices=['good', 'combined', 'contamination', 'crack', 'hole', 'allinone'], help='to load only a subset of the data')
 
     parser.add_argument('--batch_size', type=int, default=50, help='input batch size')
     parser.add_argument('--workers', type=int, default=16, help='workers')
@@ -714,8 +706,6 @@ def parse_args():
     parser.add_argument('--beta_start', default=0.0001)
     parser.add_argument('--beta_end', default=0.02)
     parser.add_argument('--schedule_type', default='linear')
-    parser.add_argument('--time_num', default=50)
-
     # params
     parser.add_argument('--loss_type', default='mse')
     parser.add_argument('--model_mean_type', default='eps')
@@ -727,7 +717,7 @@ def parse_args():
     parser.add_argument('--eval_path', default='')
     parser.add_argument('--manualSeed', default=42, type=int, help='random seed')
     parser.add_argument('--gpu', type=int, default=0, metavar='S', help='gpu id (default: 0)')    
-    parser.add_argument('--anomaly_time', type=int, default=50, metavar='S', help='anomaly time step (default: 250)')
+    parser.add_argument('--anomaly_time', type=int, default=150, metavar='S', help='anomaly time step (default: 250)')
     parser.add_argument('--visualize',  action='store_true', help='When you pass this down, we will visualize output and input')
     parser.add_argument('--test_folder', type=str, help='Folder containing ground truths.')
 
