@@ -22,8 +22,6 @@ from datasets.mvtec3d import MVTec3DTrain, MVTec3DTest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from anomaly_detection import compute_au_pro, compute_pred_masks
 
-
-
 '''
 models
 '''
@@ -411,58 +409,10 @@ def get_constrain_function(ground_truth, mask, eps, num_steps=1):
     return constrain_fn
 
 
-#############################################################################
-
 def get_dataset(dataroot, npoints, type_data=None):
     tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints)
     te_dataset = MVTec3DTest(dataroot, 'bagel', npoints, type_data=type_data)
     return tr_dataset, te_dataset
-
-
-# def evaluate_gen(opt, ref_pcs, logger):
-#     if ref_pcs is None:
-#         ref = []
-#         types_of_data = ['good', 'combined', 'contamination', 'crack', 'hole']
-
-#         for type_of_data in types_of_data:
-
-#             _, test_dataset = get_dataset(opt.dataroot, opt.npoints, type_data=type_of_data)
-#             print('test_dataset: ', test_dataset)
-
-#             test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
-#                                                           shuffle=False, num_workers=int(opt.workers), drop_last=False)
-#             print('test dataloader: ', test_dataloader)
-
-
-#             for data in tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc='Generating samples'):
-#                 # print()
-#                 # print('data keys: ', data)
-#                 data = data[1]
-#                 x = data['test_points'].to('cuda')
-#                 m, s = x.mean(dim=2, keepdims=True).float().to('cuda'), x.std(dim=2, keepdims=True).float().to('cuda')
-
-#                 ref.append(x * s + m)
-
-#         ref_pcs = torch.cat(ref, dim=0).contiguous()
-
-#     logger.info("Loading sample path: %s"
-#                 % (opt.eval_path))
-#     sample_pcs = torch.load(opt.eval_path).contiguous()
-
-#     logger.info("Generation sample size:%s reference size: %s"
-#                 % (sample_pcs.size(), ref_pcs.size()))
-
-#     # Compute metrics
-#     results = compute_all_metrics(sample_pcs, ref_pcs, opt.batch_size)
-#     results = {k: (v.cpu().detach().item()
-#                    if not isinstance(v, float) else v) for k, v in results.items()}
-
-#     pprint(results)
-#     logger.info(results)
-
-#     jsd = JSD(sample_pcs.numpy(), ref_pcs.numpy())
-#     pprint('JSD: {}'.format(jsd))
-#     logger.info('JSD: {}'.format(jsd))
 
 
 def generate(model, opt, outf_syn):
@@ -482,35 +432,14 @@ def generate(model, opt, outf_syn):
             m, s = data.mean(dim=2, keepdims=True).float(), data.std(dim=2, keepdims=True).float()
             m, s = m.transpose(1, 2).to('cuda'), s.transpose(1, 2).to('cuda')
 
-            ''' @melis: 1) You will first get the anomalous image. Then select a time step like 250 rather than using a random one and
-                apply the noise for the 250 steps to the image by q_sample(). Now you have the noisy image (data_t).
-
-                # This comes from get_loss_iter():
-                B, D, N = data.shape
-                t = torch.randint(0, self.diffusion.num_timesteps, size=(B,), device=data.device)
-
-                # This comes from p_losses:
-                B, D, N = data_start.shape
-                assert t.shape == torch.Size([B])
-                if noise is None:
-                    noise = torch.randn(data_start.shape, dtype=data_start.dtype, device=data_start.device)
-                assert noise.shape == data_start.shape and noise.dtype == data_start.dtype
-                data_t = self.q_sample(x_start=data_start, t=t, noise=noise)
-
-                2) Now you need to denoise the noisy image step by step using the reverse diffusion.  
-                Use gen_samples() method, which calls p_sample_loop(). At p_sample_loop(): Instead of generating an image from pure noise 
-                using the line img_t = noise_fn(size=shape, dtype=torch.float, device=device). Use the noisy image we prepared (data_t). 
-                Denoise it for 250 steps.
-
-            '''
             B, D, N = data.shape
-            t = torch.tensor([opt.anomaly_time] * B, device=data.device)
+            t = torch.tensor([opt.noise_timesteps] * B, device=data.device)
             assert t.shape == torch.Size([B])
             
-            # Apply noise to anomalous point-cloud for opt.anomaly_time steps
+            # Apply noise to anomalous point-cloud for opt.noise_timesteps steps
             data_t = model.diffusion.q_sample(x_start=data, t=t)
-            # Denoise the noisy point-cloud for opt.anomaly_time steps using reverse diffusion
-            gen = model.gen_samples_anomaly(data_t, 'cuda', max_timestep=opt.anomaly_time)
+            # Denoise the noisy point-cloud for opt.noise_timesteps steps using reverse diffusion
+            gen = model.gen_samples_anomaly(data_t, 'cuda', max_timestep=opt.noise_timesteps)
             
             gen = gen.transpose(1, 2).contiguous()
             data = data.transpose(1, 2).contiguous()
@@ -549,16 +478,16 @@ def main_pipeline(anomolous_data, model, opt, i, outf_syn):
 
     # Create time_step tensor
     B, D, N = x_0.shape
-    t = torch.tensor([opt.anomaly_time-1] * B, device=x_0.device)
+    t = torch.tensor([opt.noise_timesteps-1] * B, device=x_0.device)
 
     assert t.shape == torch.Size([B])
 
-    # Apply noise to anomalous point-clouds for opt.anomaly_time steps
+    # Apply noise to anomalous point-clouds for opt.noise_timesteps steps
     x_t = model.diffusion.q_sample(x_start=x_0, t=t)
     visualize_pointcloud_batch('%s/i_%03d_x_t.png' % (outf_syn, i), x_t.transpose(1,2), None, None, None)
 
-    # Denoise the noisy point-clouds for opt.anomaly_time steps using reverse diffusion
-    x_hat_0 = model.gen_samples_anomaly(x_t, 'cuda', max_timestep=opt.anomaly_time)
+    # Denoise the noisy point-clouds for opt.noise_timesteps steps using reverse diffusion
+    x_hat_0 = model.gen_samples_anomaly(x_t, 'cuda', max_timestep=opt.noise_timesteps)
 
     x_0 = x_0.contiguous()
     x_hat_0 = x_hat_0.contiguous()
@@ -589,13 +518,7 @@ def main_pipeline(anomolous_data, model, opt, i, outf_syn):
     # dist_A_to_B => distance from x_0 to x̂_0
     # dist_B_to_A => distance from x̂_0 to x_0
     closest_point_to_b, closest_point_to_a, idx_b, idx_a = distChamfer(x_0, x_hat_0)
-
-    # print('printing Chamfer...')
-    # print('closest point of b from points to a: ', closest_point_to_b)
-    # print('closest point of a from points to b: ', closest_point_to_a)
-    # print('idx of closest point on b of points from a: ', idx_b)
-    # print('idx of closest point on a of points from b: ', idx_a)
-
+    
     return x_0, x_hat_0, closest_point_to_b, closest_point_to_a
 
 
@@ -609,7 +532,7 @@ def main(opt):
 
     outf_syn, = setup_output_subdirs(output_dir, 'syn')
 
-    betas = get_betas(opt.schedule_type, opt.beta_start, opt.beta_end, opt.anomaly_time)
+    betas = get_betas(opt.schedule_type, opt.beta_start, opt.beta_end, opt.noise_timesteps)
     model = Model(opt, betas, opt.loss_type, opt.model_mean_type, opt.model_var_type)
 
     if opt.cuda:
@@ -638,7 +561,7 @@ def main(opt):
             ref = generate(model, opt, outf_syn)
 
         if opt.anomaly:
-            print('noise steps: ', opt.anomaly_time)
+            print('noise steps: ', opt.noise_timesteps)
             types_of_data = ['combined', 'contamination', 'crack', 'hole']
             
             if opt.type_data:
@@ -664,10 +587,7 @@ def main(opt):
 
 
 
-        if opt.eval_gen:
-            # Evaluate generation
-            # evaluate_gen(opt, ref, logger)
-            
+        if opt.eval_gen:            
             ## Calculate au_pro
             for type_of_data in types_of_data:
                 type_folder = setup_output_subdirs(outf_syn, type_of_data)
@@ -717,7 +637,7 @@ def parse_args():
     parser.add_argument('--eval_path', default='')
     parser.add_argument('--manualSeed', default=42, type=int, help='random seed')
     parser.add_argument('--gpu', type=int, default=0, metavar='S', help='gpu id (default: 0)')    
-    parser.add_argument('--anomaly_time', type=int, default=150, metavar='S', help='anomaly time step (default: 250)')
+    parser.add_argument('--noise_timesteps', type=int, default=50, metavar='S', help='anomaly time step (default: 250)')
     parser.add_argument('--visualize',  action='store_true', help='When you pass this down, we will visualize output and input')
     parser.add_argument('--test_folder', type=str, help='Folder containing ground truths.')
 

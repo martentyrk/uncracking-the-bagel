@@ -75,7 +75,6 @@ class MVTec3DTrain(MVTec3D):
         depth_map_3channel = np.repeat(organized_pc_to_depth_map(organized_pc)[:, :, np.newaxis], 3, axis=2)
         resized_depth_map_3channel = resize_organized_pc(depth_map_3channel)
         resized_organized_pc = resize_organized_pc(organized_pc)
-        # return (img, resized_organized_pc, resized_depth_map_3channel), label
 
         if self.npoints is not None:
             p = resized_organized_pc
@@ -111,7 +110,7 @@ class MVTec3DTest(MVTec3D):
         tot_labels = []
         # defect_types = os.listdir(self.img_path)
         # for defect_type in defect_types:
-        if (self.type_data == 'combined') or (self.type_data == 'contamination') or (self.type_data == 'crack') or (self.type_data == 'hole'):
+        if (self.type_data == 'combined') or (self.type_data == 'contamination') or (self.type_data == 'crack') or (self.type_data == 'hole') or (self.type_data == 'good'):
             print('loading images: ', self.type_data)
             rgb_paths = glob.glob(os.path.join(self.img_path, self.type_data, 'rgb') + "/*.png")
             tiff_paths = glob.glob(os.path.join(self.img_path, self.type_data, 'xyz') + "/*.tiff")
@@ -153,16 +152,6 @@ class MVTec3DTest(MVTec3D):
         depth_map_3channel = np.repeat(organized_pc_to_depth_map(organized_pc)[:, :, np.newaxis], 3, axis=2)
         resized_depth_map_3channel = resize_organized_pc(depth_map_3channel)
         resized_organized_pc = resize_organized_pc(organized_pc)
-
-        # if gt == 0:
-        #     gt = torch.zeros(
-        #         [1, resized_depth_map_3channel.size()[-2], resized_depth_map_3channel.size()[-2]])
-        # else:
-        #     gt = Image.open(gt).convert('L')
-        #     gt = self.gt_transform(gt)
-        #     gt = torch.where(gt > 0.5, 1., .0)
-
-        # return (img, resized_organized_pc, resized_depth_map_3channel), gt[:1], label
 
         if self.npoints is not None:
             p = resized_organized_pc

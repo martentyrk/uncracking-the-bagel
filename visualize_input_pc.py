@@ -48,8 +48,6 @@ def resize_organized_pc(organized_pc, target_height=224, target_width=224, tenso
     else:
         return torch_resized_organized_pc.squeeze().permute(1, 2, 0).numpy()
 
-# New code ===============================================================
-
 
 def organized_pc_to_array(organized_pc):
     pc = organized_pc.numpy().reshape(3,-1).transpose()

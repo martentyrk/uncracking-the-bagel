@@ -5,7 +5,6 @@ import torch.utils.data
 import argparse
 from torch.distributions import Normal
 
-import wandb
 from utils.file_utils import *
 from utils.visualize import *
 from model.pvcnn_generation import PVCNN2Base
@@ -488,31 +487,11 @@ def get_betas(schedule_type, b_start, b_end, time_num):
     return betas
 
 
-def get_dataset(dataroot, npoints,category, normalize):
-    if category == 'bagel':
-        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints, normalize=normalize)
-        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints)
-        return tr_dataset, te_dataset
+def get_dataset(dataroot, npoints, category, normalize):
 
-    tr_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
-        categories=[category], split='train',
-        tr_sample_size=npoints,
-        te_sample_size=npoints,
-        scale=1.,
-        normalize_per_shape=False,
-        normalize_std_per_axis=False,
-        random_subsample=True)
-    te_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
-        categories=[category], split='val',
-        tr_sample_size=npoints,
-        te_sample_size=npoints,
-        scale=1.,
-        normalize_per_shape=False,
-        normalize_std_per_axis=False,
-        all_points_mean=tr_dataset.all_points_mean,
-        all_points_std=tr_dataset.all_points_std,
-    )
-    return tr_dataset, te_dataset
+    tr_dataset = MVTec3DTrain(dataroot, category, npoints, normalize=normalize)
+    return tr_dataset
+
 
 
 def get_dataloader(opt, train_dataset, test_dataset=None):
@@ -576,7 +555,7 @@ def train(gpu, opt, output_dir, noises_init):
 
 
     ''' data '''
-    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize)
+    train_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize)
     dataloader, _, train_sampler, _ = get_dataloader(opt, train_dataset, None)
 
 
@@ -660,10 +639,6 @@ def train(gpu, opt, output_dir, noises_init):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), opt.grad_clip)
 
             optimizer.step()
-            
-            wandb.log({'Loss/train': loss.item(),
-                       'netPNorm/train': netpNorm,
-                       'netGradNorm/train': netgradNorm})
 
 
             if i % opt.print_freq == 0 and should_diag:
@@ -697,10 +672,6 @@ def train(gpu, opt, output_dir, noises_init):
                 kl_stats['terms_bpd'].item(), kl_stats['prior_bpd_b'].item(), kl_stats['mse_bt'].item()
             ))
 
-            wandb.log({'total_bpd_b/diagnose': kl_stats['total_bpd_b'].item(),
-                       'mse_bt/diagnose':kl_stats['mse_bt'].item(),
-                       'prior_bpd_b/diagnose': kl_stats['prior_bpd_b'].item(),
-                       'terms_bpd/diagnose': kl_stats['terms_bpd'].item()})
 
 
         if int(epoch + 1) % int(opt.vizIter) == 0 and should_diag:
@@ -776,24 +747,6 @@ def train(gpu, opt, output_dir, noises_init):
 def main():
     
     opt = parse_args()
-    
-    wandb.init(
-    # set the wandb project where this run will be logged
-    project="pvd-bagel",
-    
-    # track hyperparameters and run metadata
-    config={
-    "dataset": "bagels",
-    "epochs": opt.niter,
-    "points": opt.npoints,
-    'normalize': False,
-    }
-)
-        
-    if opt.category == 'airplane':
-        opt.beta_start = 1e-5
-        opt.beta_end = 0.008
-        opt.schedule_type = 'warm0.1'
 
     exp_id = os.path.splitext(os.path.basename(__file__))[0]
     dir_id = os.path.dirname(__file__)
@@ -802,7 +755,7 @@ def main():
     copy_source(__file__, output_dir)
 
     ''' workaround '''
-    train_dataset, _ = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize)
+    train_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, opt.normalize)
     noises_init = torch.randn(len(train_dataset), opt.npoints, opt.nc)
 
     if opt.dist_url == "env://" and opt.world_size == -1:
@@ -815,21 +768,20 @@ def main():
     else:
         train(opt.gpu, opt, output_dir, noises_init)
 
-    wandb.finish()
 
 
 def parse_args():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataroot', default='ShapeNetCore.v2.PC15k/')
-    parser.add_argument('--category', default='chair')
+    parser.add_argument('--dataroot', required=True)
+    parser.add_argument('--category', default='bagel')
 
     parser.add_argument('--bs', type=int, default=16, help='input batch size')
     parser.add_argument('--workers', type=int, default=16, help='workers')
-    parser.add_argument('--niter', type=int, default=10000, help='number of epochs to train for')
+    parser.add_argument('--niter', type=int, default=2500, help='number of epochs to train for')
 
     parser.add_argument('--nc', default=3)
-    parser.add_argument('--npoints', type=int, default=2048)
+    parser.add_argument('--npoints', type=int, default=10000)
     '''model'''
     parser.add_argument('--beta_start', default=0.0001)
     parser.add_argument('--beta_end', default=0.02)

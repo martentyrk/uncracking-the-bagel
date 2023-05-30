@@ -13,16 +13,7 @@ DATASETS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '/home/l
 
 def mvtec3d_classes():
     return [
-        "bagel",
-        # "cable_gland",
-        # "carrot",
-        # "cookie",
-        # "dowel",
-        # "foam",
-        # "peach",
-        # "potato",
-        # "rope",
-        # "tire",
+        "bagel"
     ]
 
 
