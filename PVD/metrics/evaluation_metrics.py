@@ -86,7 +86,9 @@ def _pairwise_EMD_CD_(sample_pcs, ref_pcs, batch_size, accelerated_cd=True):
             cd_lst.append((dl.mean(dim=1) + dr.mean(dim=1)).view(1, -1).detach().cpu())
 
             emd_batch = EMD(sample_batch_exp.cuda(), ref_batch.cuda(), transpose=False)
-            emd_lst.append(emd_batch.view(1, -1).detach().cpu())
+            new_1 = emd_batch.view(1, -1)
+            new_2 = new_1.detach()
+            emd_lst.append(new_2)
 
         cd_lst = torch.cat(cd_lst, dim=1)
         emd_lst = torch.cat(emd_lst, dim=1)
@@ -149,9 +151,7 @@ def lgan_mmd_cov(all_dist):
 
 def compute_all_metrics(sample_pcs, ref_pcs, batch_size):
     results = {}
-
     M_rs_cd, M_rs_emd = _pairwise_EMD_CD_(ref_pcs, sample_pcs, batch_size)
-
     res_cd = lgan_mmd_cov(M_rs_cd.t())
     results.update({
         "%s-CD" % k: v for k, v in res_cd.items()
