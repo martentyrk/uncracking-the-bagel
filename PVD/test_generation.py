@@ -16,16 +16,20 @@ from model.pvcnn_generation import PVCNN2Base
 from tqdm import tqdm
 
 from datasets.shapenet_data_pc import ShapeNet15kPointClouds
+from datasets.mvtec3d import MVTec3DTrain, MVTec3DTest
 
 '''
 models
 '''
+
+
 def normal_kl(mean1, logvar1, mean2, logvar2):
     """
     KL divergence between normal distributions parameterized by mean and log-variance.
     """
     return 0.5 * (-1.0 + logvar2 - logvar1 + torch.exp(logvar1 - logvar2)
-                + (mean1 - mean2)**2 * torch.exp(-logvar2))
+                  + (mean1 - mean2) ** 2 * torch.exp(-logvar2))
+
 
 def discretized_gaussian_log_likelihood(x, *, means, log_scales):
     # Assumes data is integers [0, 1]
@@ -38,20 +42,20 @@ def discretized_gaussian_log_likelihood(x, *, means, log_scales):
     cdf_plus = px0.cdf(plus_in)
     min_in = inv_stdv * (centered_x - .5)
     cdf_min = px0.cdf(min_in)
-    log_cdf_plus = torch.log(torch.max(cdf_plus, torch.ones_like(cdf_plus)*1e-12))
-    log_one_minus_cdf_min = torch.log(torch.max(1. - cdf_min,  torch.ones_like(cdf_min)*1e-12))
+    log_cdf_plus = torch.log(torch.max(cdf_plus, torch.ones_like(cdf_plus) * 1e-12))
+    log_one_minus_cdf_min = torch.log(torch.max(1. - cdf_min, torch.ones_like(cdf_min) * 1e-12))
     cdf_delta = cdf_plus - cdf_min
 
     log_probs = torch.where(
-    x < 0.001, log_cdf_plus,
-    torch.where(x > 0.999, log_one_minus_cdf_min,
-             torch.log(torch.max(cdf_delta, torch.ones_like(cdf_delta)*1e-12))))
+        x < 0.001, log_cdf_plus,
+        torch.where(x > 0.999, log_one_minus_cdf_min,
+                    torch.log(torch.max(cdf_delta, torch.ones_like(cdf_delta) * 1e-12))))
     assert log_probs.shape == x.shape
     return log_probs
 
 
 class GaussianDiffusion:
-    def __init__(self,betas, loss_type, model_mean_type, model_var_type):
+    def __init__(self, betas, loss_type, model_mean_type, model_var_type):
         self.loss_type = loss_type
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
@@ -86,7 +90,8 @@ class GaussianDiffusion:
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
         self.posterior_variance = posterior_variance
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
-        self.posterior_log_variance_clipped = torch.log(torch.max(posterior_variance, 1e-20 * torch.ones_like(posterior_variance)))
+        self.posterior_log_variance_clipped = torch.log(
+            torch.max(posterior_variance, 1e-20 * torch.ones_like(posterior_variance)))
         self.posterior_mean_coef1 = betas * torch.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod)
         self.posterior_mean_coef2 = (1. - alphas_cumprod_prev) * torch.sqrt(alphas) / (1. - alphas_cumprod)
 
@@ -101,8 +106,6 @@ class GaussianDiffusion:
         out = torch.gather(a, 0, t)
         assert out.shape == torch.Size([bs])
         return torch.reshape(out, [bs] + ((len(x_shape) - 1) * [1]))
-
-
 
     def q_mean_variance(self, x_start, t):
         mean = self._extract(self.sqrt_alphas_cumprod.to(x_start.device), t, x_start.shape) * x_start
@@ -122,7 +125,6 @@ class GaussianDiffusion:
                 self._extract(self.sqrt_one_minus_alphas_cumprod.to(x_start.device), t, x_start.shape) * noise
         )
 
-
     def q_posterior_mean_variance(self, x_start, x_t, t):
         """
         Compute the mean and variance of the diffusion posterior q(x_{t-1} | x_t, x_0)
@@ -133,16 +135,15 @@ class GaussianDiffusion:
                 self._extract(self.posterior_mean_coef2.to(x_start.device), t, x_t.shape) * x_t
         )
         posterior_variance = self._extract(self.posterior_variance.to(x_start.device), t, x_t.shape)
-        posterior_log_variance_clipped = self._extract(self.posterior_log_variance_clipped.to(x_start.device), t, x_t.shape)
+        posterior_log_variance_clipped = self._extract(self.posterior_log_variance_clipped.to(x_start.device), t,
+                                                       x_t.shape)
         assert (posterior_mean.shape[0] == posterior_variance.shape[0] == posterior_log_variance_clipped.shape[0] ==
                 x_start.shape[0])
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-
     def p_mean_variance(self, denoise_fn, data, t, clip_denoised: bool, return_pred_xstart: bool):
 
         model_output = denoise_fn(data, t)
-
 
         if self.model_var_type in ['fixedsmall', 'fixedlarge']:
             # below: only log_variance is used in the KL computations
@@ -150,7 +151,8 @@ class GaussianDiffusion:
                 # for fixedlarge, we set the initial (log-)variance like so to get a better decoder log likelihood
                 'fixedlarge': (self.betas.to(data.device),
                                torch.log(torch.cat([self.posterior_variance[1:2], self.betas[1:]])).to(data.device)),
-                'fixedsmall': (self.posterior_variance.to(data.device), self.posterior_log_variance_clipped.to(data.device)),
+                'fixedsmall': (
+                self.posterior_variance.to(data.device), self.posterior_log_variance_clipped.to(data.device)),
             }[self.model_var_type]
             model_variance = self._extract(model_variance, t, data.shape) * torch.ones_like(data)
             model_log_variance = self._extract(model_log_variance, t, data.shape) * torch.ones_like(data)
@@ -166,7 +168,6 @@ class GaussianDiffusion:
             model_mean, _, _ = self.q_posterior_mean_variance(x_start=x_recon, x_t=data, t=t)
         else:
             raise NotImplementedError(self.loss_type)
-
 
         assert model_mean.shape == x_recon.shape == data.shape
         assert model_variance.shape == model_log_variance.shape == data.shape
@@ -188,8 +189,9 @@ class GaussianDiffusion:
         """
         Sample from the model
         """
-        model_mean, _, model_log_variance, pred_xstart = self.p_mean_variance(denoise_fn, data=data, t=t, clip_denoised=clip_denoised,
-                                                                 return_pred_xstart=True)
+        model_mean, _, model_log_variance, pred_xstart = self.p_mean_variance(denoise_fn, data=data, t=t,
+                                                                              clip_denoised=clip_denoised,
+                                                                              return_pred_xstart=True)
         noise = noise_fn(size=data.shape, dtype=data.dtype, device=data.device)
         assert noise.shape == data.shape
         # no noise when t == 0
@@ -201,9 +203,8 @@ class GaussianDiffusion:
         assert sample.shape == pred_xstart.shape
         return (sample, pred_xstart) if return_pred_xstart else sample
 
-
     def p_sample_loop(self, denoise_fn, shape, device,
-                      noise_fn=torch.randn, constrain_fn=lambda x, t:x,
+                      noise_fn=torch.randn, constrain_fn=lambda x, t: x,
                       clip_denoised=True, max_timestep=None, keep_running=False):
         """
         Generate samples
@@ -220,28 +221,26 @@ class GaussianDiffusion:
         for t in reversed(range(0, final_time if not keep_running else len(self.betas))):
             img_t = constrain_fn(img_t, t)
             t_ = torch.empty(shape[0], dtype=torch.int64, device=device).fill_(t)
-            img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t,t=t_, noise_fn=noise_fn,
+            img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t, t=t_, noise_fn=noise_fn,
                                   clip_denoised=clip_denoised, return_pred_xstart=False).detach()
-
 
         assert img_t.shape == shape
         return img_t
 
-    def reconstruct(self, x0, t, denoise_fn, noise_fn=torch.randn, constrain_fn=lambda x, t:x):
+    def reconstruct(self, x0, t, denoise_fn, noise_fn=torch.randn, constrain_fn=lambda x, t: x):
 
         assert t >= 1
 
-        t_vec = torch.empty(x0.shape[0], dtype=torch.int64, device=x0.device).fill_(t-1)
+        t_vec = torch.empty(x0.shape[0], dtype=torch.int64, device=x0.device).fill_(t - 1)
         encoding = self.q_sample(x0, t_vec)
 
         img_t = encoding
 
-        for k in reversed(range(0,t)):
+        for k in reversed(range(0, t)):
             img_t = constrain_fn(img_t, k)
             t_ = torch.empty(x0.shape[0], dtype=torch.int64, device=x0.device).fill_(k)
             img_t = self.p_sample(denoise_fn=denoise_fn, data=img_t, t=t_, noise_fn=noise_fn,
                                   clip_denoised=False, return_pred_xstart=False, use_var=True).detach()
-
 
         return img_t
 
@@ -260,7 +259,7 @@ class PVCNN2(PVCNN2Base):
         ((128, 128, 64), (64, 2, 32)),
     ]
 
-    def __init__(self, num_classes, embed_dim, use_att,dropout, extra_feature_channels=3, width_multiplier=1,
+    def __init__(self, num_classes, embed_dim, use_att, dropout, extra_feature_channels=3, width_multiplier=1,
                  voxel_resolution_multiplier=1):
         super().__init__(
             num_classes=num_classes, embed_dim=embed_dim, use_att=use_att,
@@ -269,9 +268,8 @@ class PVCNN2(PVCNN2Base):
         )
 
 
-
 class Model(nn.Module):
-    def __init__(self, args, betas, loss_type: str, model_mean_type: str, model_var_type:str):
+    def __init__(self, args, betas, loss_type: str, model_mean_type: str, model_var_type: str):
         super(Model, self).__init__()
         self.diffusion = GaussianDiffusion(betas, loss_type, model_mean_type, model_var_type)
 
@@ -282,18 +280,17 @@ class Model(nn.Module):
         return self.diffusion._prior_bpd(x0)
 
     def all_kl(self, x0, clip_denoised=True):
-        total_bpd_b, vals_bt, prior_bpd_b, mse_bt =  self.diffusion.calc_bpd_loop(self._denoise, x0, clip_denoised)
+        total_bpd_b, vals_bt, prior_bpd_b, mse_bt = self.diffusion.calc_bpd_loop(self._denoise, x0, clip_denoised)
 
         return {
             'total_bpd_b': total_bpd_b,
             'terms_bpd': vals_bt,
             'prior_bpd_b': prior_bpd_b,
-            'mse_bt':mse_bt
+            'mse_bt': mse_bt
         }
 
-
     def _denoise(self, data, t):
-        B, D,N= data.shape
+        B, D, N = data.shape
         assert data.dtype == torch.float
         assert t.shape == torch.Size([B]) and t.dtype == torch.int64
 
@@ -307,14 +304,14 @@ class Model(nn.Module):
         t = torch.randint(0, self.diffusion.num_timesteps, size=(B,), device=data.device)
 
         if noises is not None:
-            noises[t!=0] = torch.randn((t!=0).sum(), *noises.shape[1:]).to(noises)
+            noises[t != 0] = torch.randn((t != 0).sum(), *noises.shape[1:]).to(noises)
 
         losses = self.diffusion.p_losses(
             denoise_fn=self._denoise, data_start=data, t=t, noise=noises)
         assert losses.shape == t.shape == torch.Size([B])
         return losses
 
-    def gen_samples(self, shape, device, noise_fn=torch.randn, constrain_fn=lambda x, t:x,
+    def gen_samples(self, shape, device, noise_fn=torch.randn, constrain_fn=lambda x, t: x,
                     clip_denoised=False, max_timestep=None,
                     keep_running=False):
         return self.diffusion.p_sample_loop(self._denoise, shape=shape, device=device, noise_fn=noise_fn,
@@ -322,8 +319,7 @@ class Model(nn.Module):
                                             clip_denoised=clip_denoised, max_timestep=max_timestep,
                                             keep_running=keep_running)
 
-    def reconstruct(self, x0, t, constrain_fn=lambda x, t:x):
-
+    def reconstruct(self, x0, t, constrain_fn=lambda x, t: x):
         return self.diffusion.reconstruct(x0, t, self._denoise, constrain_fn=constrain_fn)
 
     def train(self):
@@ -358,6 +354,7 @@ def get_betas(schedule_type, b_start, b_end, time_num):
         raise NotImplementedError(schedule_type)
     return betas
 
+
 def get_constrain_function(ground_truth, mask, eps, num_steps=1):
     '''
 
@@ -365,65 +362,68 @@ def get_constrain_function(ground_truth, mask, eps, num_steps=1):
     :return: constrained x
     '''
     # eps_all = list(reversed(np.linspace(0,np.float_power(eps, 1/2), 500)**2))
-    eps_all = list(reversed(np.linspace(0, np.sqrt(eps), 1000)**2 ))
-    def constrain_fn(x, t):
-        eps_ =  eps_all[t] if (t<1000) else 0
-        for _ in range(num_steps):
-            x  = x - eps_ * ((x - ground_truth) * mask)
+    eps_all = list(reversed(np.linspace(0, np.sqrt(eps), 1000) ** 2))
 
+    def constrain_fn(x, t):
+        eps_ = eps_all[t] if (t < 1000) else 0
+        for _ in range(num_steps):
+            x = x - eps_ * ((x - ground_truth) * mask)
 
         return x
+
     return constrain_fn
 
 
 #############################################################################
 
-def get_dataset(dataroot, npoints,category,use_mask=False):
+def get_dataset(dataroot, npoints, category, use_mask=False):
+    if category == 'bagel':
+        tr_dataset = MVTec3DTrain(dataroot, 'bagel', npoints)
+        te_dataset = MVTec3DTest(dataroot, 'bagel', npoints, type_data='good')
+        return tr_dataset, te_dataset
+
     tr_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
-        categories=[category], split='train',
-        tr_sample_size=npoints,
-        te_sample_size=npoints,
-        scale=1.,
-        normalize_per_shape=False,
-        normalize_std_per_axis=False,
-        random_subsample=True, use_mask = use_mask)
+                                        categories=[category], split='train',
+                                        tr_sample_size=npoints,
+                                        te_sample_size=npoints,
+                                        scale=1.,
+                                        normalize_per_shape=False,
+                                        normalize_std_per_axis=False,
+                                        random_subsample=True, use_mask=use_mask)
     te_dataset = ShapeNet15kPointClouds(root_dir=dataroot,
-        categories=[category], split='val',
-        tr_sample_size=npoints,
-        te_sample_size=npoints,
-        scale=1.,
-        normalize_per_shape=False,
-        normalize_std_per_axis=False,
-        all_points_mean=tr_dataset.all_points_mean,
-        all_points_std=tr_dataset.all_points_std,
-        use_mask=use_mask
-    )
+                                        categories=[category], split='val',
+                                        tr_sample_size=npoints,
+                                        te_sample_size=npoints,
+                                        scale=1.,
+                                        normalize_per_shape=False,
+                                        normalize_std_per_axis=False,
+                                        all_points_mean=tr_dataset.all_points_mean,
+                                        all_points_std=tr_dataset.all_points_std,
+                                        use_mask=use_mask
+                                        )
     return tr_dataset, te_dataset
 
 
-
 def evaluate_gen(opt, ref_pcs, logger):
-
     if ref_pcs is None:
         _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category, use_mask=False)
         test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
                                                       shuffle=False, num_workers=int(opt.workers), drop_last=False)
         ref = []
         for data in tqdm(test_dataloader, total=len(test_dataloader), desc='Generating Samples'):
-            x = data['test_points']
-            m, s = data['mean'].float(), data['std'].float()
+            x = data['test_points'].to('cuda')
+            m, s = x.mean(dim=2, keepdims=True).float().to('cuda'), x.std(dim=2, keepdims=True).float().to('cuda')
 
-            ref.append(x*s + m)
+            ref.append(x * s + m)
 
         ref_pcs = torch.cat(ref, dim=0).contiguous()
 
     logger.info("Loading sample path: %s"
-      % (opt.eval_path))
+                % (opt.eval_path))
     sample_pcs = torch.load(opt.eval_path).contiguous()
 
     logger.info("Generation sample size:%s reference size: %s"
-          % (sample_pcs.size(), ref_pcs.size()))
-
+                % (sample_pcs.size(), ref_pcs.size()))
 
     # Compute metrics
     results = compute_all_metrics(sample_pcs, ref_pcs, opt.batch_size)
@@ -433,39 +433,36 @@ def evaluate_gen(opt, ref_pcs, logger):
     pprint(results)
     logger.info(results)
 
-    jsd = JSD(sample_pcs.numpy(), ref_pcs.numpy())
+    jsd = JSD(sample_pcs.cpu().numpy(), ref_pcs.cpu().numpy())
     pprint('JSD: {}'.format(jsd))
     logger.info('JSD: {}'.format(jsd))
 
 
-
 def generate(model, opt):
-
     _, test_dataset = get_dataset(opt.dataroot, opt.npoints, opt.category)
 
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=opt.batch_size,
                                                   shuffle=False, num_workers=int(opt.workers), drop_last=False)
 
     with torch.no_grad():
-
         samples = []
         ref = []
 
         for i, data in tqdm(enumerate(test_dataloader), total=len(test_dataloader), desc='Generating Samples'):
-
-            x = data['test_points'].transpose(1,2)
-            m, s = data['mean'].float(), data['std'].float()
-
+            x = data['test_points'].transpose(1, 2).to('cuda')
+            m, s = x.mean(dim=2, keepdims=True).float().to('cuda'), x.std(dim=2, keepdims=True).float().to('cuda')
             gen = model.gen_samples(x.shape,
-                                       'cuda', clip_denoised=False).detach().cpu()
-
-            gen = gen.transpose(1,2).contiguous()
-            x = x.transpose(1,2).contiguous()
-
-
-
+                                    'cuda', clip_denoised=False)
             gen = gen * s + m
             x = x * s + m
+            gen = gen.transpose(1, 2).contiguous()
+            x = x.transpose(1, 2).contiguous()
+
+            print('gen shape: ', gen.shape)
+            print('m and s: ', m.shape, s.shape)
+            # gen = gen * s + m
+
+            # x = x * s + m
             samples.append(gen)
             ref.append(x)
 
@@ -476,8 +473,6 @@ def generate(model, opt):
         ref = torch.cat(ref, dim=0)
 
         torch.save(samples, opt.eval_path)
-
-
 
     return ref
 
@@ -512,40 +507,38 @@ def main(opt):
         resumed_param = torch.load(opt.model)
         model.load_state_dict(resumed_param['model_state'])
 
-
         ref = None
         if opt.generate:
             opt.eval_path = os.path.join(outf_syn, 'samples.pth')
             Path(opt.eval_path).parent.mkdir(parents=True, exist_ok=True)
-            ref=generate(model, opt)
-            
+            ref = generate(model, opt)
+
         if opt.eval_gen:
             # Evaluate generation
             evaluate_gen(opt, ref, logger)
 
 
 def parse_args():
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataroot', required=True)
     parser.add_argument('--category', default='bagel')
 
-    parser.add_argument('--batch_size', type=int, default=50, help='input batch size')
+    parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
     parser.add_argument('--workers', type=int, default=16, help='workers')
     parser.add_argument('--niter', type=int, default=10000, help='number of epochs to train for')
 
-    parser.add_argument('--generate',default=True)
+    parser.add_argument('--generate', default=True)
     parser.add_argument('--eval_gen', default=True)
 
     parser.add_argument('--nc', default=3)
-    parser.add_argument('--npoints', default=2048)
+    parser.add_argument('--npoints', default=10000)
     '''model'''
     parser.add_argument('--beta_start', default=0.0001)
     parser.add_argument('--beta_end', default=0.02)
     parser.add_argument('--schedule_type', default='linear')
     parser.add_argument('--time_num', default=1000)
 
-    #params
+    # params
     parser.add_argument('--attention', default=True)
     parser.add_argument('--dropout', default=0.1)
     parser.add_argument('--embed_dim', type=int, default=64)
@@ -553,11 +546,10 @@ def parse_args():
     parser.add_argument('--model_mean_type', default='eps')
     parser.add_argument('--model_var_type', default='fixedsmall')
 
-
-    parser.add_argument('--model', default='',required=True, help="path to model (to continue training)")
+    parser.add_argument('--model', default='', required=True, help="path to model (to continue training)")
 
     '''eval'''
-
+    # output/test_generation_original/2023-05-31-19-31-46/syn/samples.pth
     parser.add_argument('--eval_path',
                         default='')
 
@@ -573,6 +565,8 @@ def parse_args():
         opt.cuda = False
 
     return opt
+
+
 if __name__ == '__main__':
     opt = parse_args()
     set_seed(opt)

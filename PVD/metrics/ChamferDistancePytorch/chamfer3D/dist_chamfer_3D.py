@@ -38,11 +38,18 @@ class chamfer_3DFunction(Function):
         idx1 = torch.zeros(batchsize, n).type(torch.IntTensor)
         idx2 = torch.zeros(batchsize, m).type(torch.IntTensor)
 
-        dist1 = dist1.to(device)
-        dist2 = dist2.to(device)
-        idx1 = idx1.to(device)
-        idx2 = idx2.to(device)
-        torch.cuda.set_device(device)
+
+        # dist1 = dist1.to('cuda:0')
+        # dist2 = dist2.to('cuda:0')
+        # idx1 = idx1.to('cuda:0')
+        # idx2 = idx2.to('cuda:0')
+        # torch.cuda.set_device('cuda:0')
+
+        dist1 = dist1.to(torch.device('cuda:0'))
+        dist2 = dist2.to(torch.device('cuda:0'))
+        idx1 = idx1.to(torch.device('cuda:0'))
+        idx2 = idx2.to(torch.device('cuda:0'))
+        torch.cuda.set_device(torch.device('cuda:0'))
 
         chamfer_3D.forward(xyz1, xyz2, dist1, dist2, idx1, idx2)
         ctx.save_for_backward(xyz1, xyz2, idx1, idx2)
