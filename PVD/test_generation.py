@@ -478,11 +478,6 @@ def generate(model, opt):
 
 
 def main(opt):
-    if opt.category == 'airplane':
-        opt.beta_start = 1e-5
-        opt.beta_end = 0.008
-        opt.schedule_type = 'warm0.1'
-
     exp_id = os.path.splitext(os.path.basename(__file__))[0]
     dir_id = os.path.dirname(__file__)
     output_dir = get_output_dir(dir_id, exp_id)
@@ -525,8 +520,8 @@ def main(opt):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataroot', default='ShapeNetCore.v2.PC15k/')
-    parser.add_argument('--category', default='chair')
+    parser.add_argument('--dataroot', required=True)
+    parser.add_argument('--category', default='bagel')
 
     parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
     parser.add_argument('--workers', type=int, default=16, help='workers')
