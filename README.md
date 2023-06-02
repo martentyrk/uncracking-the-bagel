@@ -1,6 +1,6 @@
 # Uncracking the Bagel One Crumb at a Time
 
-Implementation of anomaly detection detection using point-voxel diffusion.
+Implementation of anomaly detection detection on MVTec 3D-AD dataset using point-voxel diffusion.
 ![](static/overview.png)
 *Figure of the anomaly detection pipeline*
 
