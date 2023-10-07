@@ -1,33 +1,21 @@
 # Uncracking the Bagel One Crumb at a Time
 
-Implementation of anomaly detection detection on MVTec 3D-AD dataset using point-voxel diffusion.
+This repository contains the implementation of anomaly detection on MVTec 3D-AD dataset using point-voxel diffusion.
+
 ![](static/overview.png)
 *Figure of the anomaly detection pipeline*
 
-## Requirements:
+
+## Requirements
+
+Create the environment and install the requirements using the `requirements.txt` file
 
 ```
-python==3.6
-pytorch==1.4.0
-torchvision==0.5.0
-cudatoolkit==10.1
-matplotlib==2.2.5
-tqdm==4.32.1
-open3d==0.9.0
-trimesh=3.7.12
-scipy==1.5.1
-werkzeug==2.0.3
-markupsafe==2.0.1
-cudatoolkit-dev
-scikit-learn
-tifffile
-Pillow
-numpy
-wget
-timm
-kornia
-scikit-image
+conda create -n pvd python=3.6
+conda activate pvd
+pip install -r requirements.txt
 ```
+
 
 ## Dataset
 
