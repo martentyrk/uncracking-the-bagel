@@ -1,6 +1,9 @@
 # Uncracking the Bagel One Crumb at a Time
 
 This repository contains the implementation of anomaly detection on MVTec 3D-AD dataset using point-voxel diffusion.
+We provide the [report](docs/report.pdf) and [poster](docs/poster.pdf) under `docs/` folder.
+
+This project is a part of the course Computer Vision 2 at the University of Amsterdam (UvA) in the [MSc Artificial Intelligence](https://www.uva.nl/shared-content/programmas/en/masters/artificial-intelligence/artificial-intelligence.html?origin=znSrDUT%2BQ5uz6dso72fBmw).
 
 ![](static/overview.png)
 *Figure of the anomaly detection pipeline*
